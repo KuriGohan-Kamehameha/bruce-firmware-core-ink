@@ -1,0 +1,1 @@
+-T rom.api.ld -T esp32c2.peripherals.ld -T esp32c2.rom.ld -T esp32c2.rom.api.ld -T esp32c2.rom.rvfp.ld -T esp32c2.rom.wdt.ld -T esp32c2.rom.systimer.ld -T esp32c2.rom.version.ld -T esp32c2.rom.ble.ld -T esp32c2.rom.libc.ld -T esp32c2.rom.libc-suboptimal_for_misaligned_mem.ld -T esp32c2.rom.newlib.ld -T esp32c2.rom.newlib-nano.ld -T esp32c2.rom.heap.ld -T memory.ld -T sections.ld 

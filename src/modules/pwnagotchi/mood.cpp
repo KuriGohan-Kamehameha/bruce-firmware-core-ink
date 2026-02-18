@@ -75,6 +75,8 @@ String getCurrentMoodPhrase() { return current_phrase; }
 bool isCurrentMoodBroken() { return current_broken; }
 
 void setMood(uint8_t mood, String face, String phrase, bool broken) {
+    if (mood >= number_of_moods) mood = 0;
+
     current_mood = mood;
     current_broken = broken;
 

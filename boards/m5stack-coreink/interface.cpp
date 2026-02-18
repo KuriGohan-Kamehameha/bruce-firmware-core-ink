@@ -1,5 +1,6 @@
 #include "core/powerSave.h"
 #include <M5Unified.h>
+#include <globals.h>
 #include <interface.h>
 
 namespace {
@@ -7,10 +8,26 @@ constexpr uint8_t ROCKER_LEFT_PIN = 39;
 constexpr uint8_t ROCKER_CENTER_PIN = 38;
 constexpr uint8_t ROCKER_RIGHT_PIN = 37;
 constexpr bool ROCKER_ACTIVE_LOW = true;
+constexpr uint8_t INPUT_LED_ON = 255;
+constexpr uint8_t INPUT_LED_OFF = 0;
+constexpr uint32_t INPUT_LED_PULSE_MS = 35;
+uint32_t g_inputLedPulseUntilMs = 0;
 
 bool readRockerPin(uint8_t pin) {
     int level = digitalRead(pin);
     return ROCKER_ACTIVE_LOW ? (level == LOW) : (level == HIGH);
+}
+
+void serviceInputLedPulse() {
+    if (g_inputLedPulseUntilMs != 0 && millis() >= g_inputLedPulseUntilMs) {
+        M5.Power.setLed(INPUT_LED_OFF);
+        g_inputLedPulseUntilMs = 0;
+    }
+}
+
+void triggerInputLedPulse() {
+    M5.Power.setLed(INPUT_LED_ON);
+    g_inputLedPulseUntilMs = millis() + INPUT_LED_PULSE_MS;
 }
 } // namespace
 
@@ -21,9 +38,10 @@ bool readRockerPin(uint8_t pin) {
 ***************************************************************************************/
 void _setup_gpio() {
     M5.begin();
-    pinMode(ROCKER_LEFT_PIN, INPUT);
-    pinMode(ROCKER_CENTER_PIN, INPUT);
-    pinMode(ROCKER_RIGHT_PIN, INPUT);
+    pinMode(ROCKER_LEFT_PIN, INPUT_PULLUP);
+    pinMode(ROCKER_CENTER_PIN, INPUT_PULLUP);
+    pinMode(ROCKER_RIGHT_PIN, INPUT_PULLUP);
+    M5.Power.setLed(INPUT_LED_OFF);
 }
 
 /***************************************************************************************
@@ -52,6 +70,7 @@ void InputHandler(void) {
     if (millis() - tm < 200 && !LongPress) return;
 
     M5.update();
+    serviceInputLedPulse();
 
     // Rocker button: left/right = next/prev (inverted for intuitive nav), center = select/back
     static bool lastLeft = false;
@@ -84,12 +103,15 @@ void InputHandler(void) {
     if (any) tm = millis();
     if (any && wakeUpScreen()) return;
 
+    if (any) { triggerInputLedPulse(); }
+
     AnyKeyPress = any;
     UpPress = false;
     DownPress = false;
-    SelPress = centerPressed && !centerLongPress; // Select on short press
-    NextPress = leftPressed;                      // Inverted: left = next (right direction)
-    PrevPress = rightPressed;                     // Inverted: right = prev (left direction)
+    const bool invertRocker = bruceConfig.rockerInverted;
+    SelPress = centerPressed && !centerLongPress;           // Select on short press
+    NextPress = invertRocker ? rightPressed : leftPressed;  // Next item
+    PrevPress = invertRocker ? leftPressed : rightPressed;  // Previous item
     EscPress = centerLongPress;                   // Back on long press (800ms+)
     LongPress = false;
 }

@@ -111,6 +111,8 @@ void enableBLEAPI();
 
 bool appStoreInstalled();
 
+void ensureAppStorePreinstalled();
+
 void installAppStoreJS();
 #endif
 

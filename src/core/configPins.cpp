@@ -26,6 +26,12 @@ void BruceConfigPins::fromJson(JsonObject obj) {
         count++;
         log_e("Fail");
     }
+    if (!root["rotSet"].isNull()) {
+        rotationConfigured = root["rotSet"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
 
     if (!root["bleName"].isNull()) {
         bleName = root["bleName"].as<String>();
@@ -200,6 +206,7 @@ void BruceConfigPins::toJson(JsonObject obj) const {
     JsonObject root = obj[getMacAddress()].to<JsonObject>();
 
     root["rot"] = rotation;
+    root["rotSet"] = rotationConfigured;
     root["irTx"] = irTx;
     root["irTxRepeats"] = irTxRepeats;
     root["irRx"] = irRx;
@@ -416,12 +423,13 @@ void BruceConfigPins::validateUARTPins(UARTPins value) {
 
 void BruceConfigPins::setRotation(int value) {
     rotation = value;
+    rotationConfigured = true;
     validateRotationValue();
     saveFile();
 }
 
 void BruceConfigPins::validateRotationValue() {
-    if (rotation < 0 || rotation > 3) rotation = 1;
+    if (rotation < 0 || rotation > 3) rotation = ROTATION;
 }
 
 void BruceConfigPins::setBleName(String value) {

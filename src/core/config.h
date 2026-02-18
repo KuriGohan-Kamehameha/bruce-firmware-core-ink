@@ -43,7 +43,11 @@ public:
     float tmz = 0;
     bool dst = false;
     bool clock24hr = true;
+    #if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
     int soundEnabled = 1;
+    #else
+    int soundEnabled = 0;
+    #endif
     int soundVolume = 100;
     int wifiAtStartup = 0;
     int instantBoot = 0;
@@ -83,7 +87,12 @@ public:
     String startupAppJSInterpreterFile = "";
     String wigleBasicToken = "";
     int devMode = 0;
+#if defined(HAS_EINK)
+    int colorInverted = 0;
+#else
     int colorInverted = 1;
+#endif
+    int rockerInverted = 0;
     int badUSBBLEKeyboardLayout = 0;
     uint16_t badUSBBLEKeyDelay = 10;
     bool badUSBBLEShowOutput = true;
@@ -181,6 +190,8 @@ public:
     void validateDevModeValue();
     void setColorInverted(int value);
     void validateColorInverted();
+    void setRockerInverted(int value);
+    void validateRockerInvertedValue();
     void setBadUSBBLEKeyboardLayout(int value);
     void validateBadUSBBLEKeyboardLayout();
     void setBadUSBBLEKeyDelay(uint16_t value);

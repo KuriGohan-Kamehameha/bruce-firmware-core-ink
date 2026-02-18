@@ -4,8 +4,8 @@
 #include <ArduinoJson.h>
 
 #if defined(HAS_EINK)
-#define DEFAULT_PRICOLOR 0xFFFF
-#define DEFAULT_SECCOLOR 0xFFFF
+#define DEFAULT_PRICOLOR 0x0000
+#define DEFAULT_SECCOLOR 0x0000
 #else
 #define DEFAULT_PRICOLOR 0xA80F
 #define DEFAULT_SECCOLOR 0xCB76
@@ -71,7 +71,7 @@ public:
     uint16_t priColor = DEFAULT_PRICOLOR;
     uint16_t secColor = DEFAULT_SECCOLOR;
 #if defined(HAS_EINK)
-    uint16_t bgColor = 0x0000;
+    uint16_t bgColor = 0xFFFF;
 #else
     uint16_t bgColor = 0x0000;
 #endif
