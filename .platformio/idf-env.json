@@ -1,0 +1,16 @@
+{
+    "idfInstalled": {
+        "/Users/sat/coreink-bruce/.platformio/packages/tool-esp_install-v5.5": {
+            "version": "5.5",
+            "path": "/Users/sat/coreink-bruce/.platformio/packages/tool-esp_install",
+            "features": [
+                "core"
+            ],
+            "targets": [
+                "esp32s3",
+                "esp32",
+                "esp32s2"
+            ]
+        }
+    }
+}

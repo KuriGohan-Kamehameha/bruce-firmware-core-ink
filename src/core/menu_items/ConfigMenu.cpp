@@ -27,14 +27,16 @@ void ConfigMenu::optionsMenu() {
 #ifdef HAS_RGB_LED
             {"LED Config",    [this]() { ledMenu(); }      },
 #endif
-            {"Audio Config",  [this]() { audioMenu(); }    },
             {"System Config", [this]() { systemMenu(); }   },
             {"Power",         [this]() { powerMenu(); }    },
         };
+#if !defined(LITE_VERSION) && (defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR))
+        localOptions.push_back({"Audio Config", [this]() { audioMenu(); }});
+#endif
 #if !defined(LITE_VERSION)
-        if (!appStoreInstalled()) {
-            localOptions.push_back({"Install App Store", []() { installAppStoreJS(); }});
-        }
+        localOptions.push_back(
+            {appStoreInstalled() ? "Update App Store" : "Install App Store", []() { installAppStoreJS(); }}
+        );
 #endif
 
         if (bruceConfig.devMode) {
@@ -66,6 +68,8 @@ void ConfigMenu::displayUIMenu() {
 #endif
             {"B/W Invert",  [this]() { setBWInvertMenu(); }                 },
             {"Orientation", [this]() { lambdaHelper(gsetRotation, true)(); }},
+            {String("Rocker Invert: ") + (bruceConfig.rockerInverted ? "ON" : "OFF"),
+             [this]() { bruceConfig.setRockerInverted(!bruceConfig.rockerInverted); }},
 #if !defined(HAS_EINK)
             {"UI Color",    [this]() { setUIColor(); }                      },
             {"UI Theme",    [this]() { setTheme(); }                        },
@@ -236,7 +240,9 @@ void ConfigMenu::powerMenu() {
     while (true) {
         std::vector<Option> localOptions = {
             {"Deep Sleep", goToDeepSleep          },
+#if !defined(HAS_EINK)
             {"Sleep",      setSleepMode           },
+#endif
             {"Restart",    []() { ESP.restart(); }},
             {"Power Off",
              []() {

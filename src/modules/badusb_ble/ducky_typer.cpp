@@ -678,20 +678,22 @@ void MediaCommands(HIDInterface *hid, bool ble) {
 
     reMenu:
         options = {
-            {"ScreenShot", [=]() { hid->press(KEY_PRINT_SCREEN); }        },
-            {"Play/Pause", [=]() { hid->press(KEY_MEDIA_PLAY_PAUSE); }    },
-            {"Stop",       [=]() { hid->press(KEY_MEDIA_STOP); }          },
-            {"Next Track", [=]() { hid->press(KEY_MEDIA_NEXT_TRACK); }    },
-            {"Prev Track", [=]() { hid->press(KEY_MEDIA_PREVIOUS_TRACK); }},
-            {"Volume +",   [=]() { hid->press(KEY_MEDIA_VOLUME_UP); }     },
-            {"Volume -",   [=]() { hid->press(KEY_MEDIA_VOLUME_DOWN); }   },
+            {"ScreenShot", [=]() { hid->press(KEY_PRINT_SCREEN); }, false, true        },
+            {"Play/Pause", [=]() { hid->press(KEY_MEDIA_PLAY_PAUSE); }, false, true    },
+            {"Stop",       [=]() { hid->press(KEY_MEDIA_STOP); }, false, true          },
+            {"Next Track", [=]() { hid->press(KEY_MEDIA_NEXT_TRACK); }, false, true    },
+            {"Prev Track", [=]() { hid->press(KEY_MEDIA_PREVIOUS_TRACK); }, false, true},
+            {"Volume +",   [=]() { hid->press(KEY_MEDIA_VOLUME_UP); }, false, true     },
+            {"Volume -",   [=]() { hid->press(KEY_MEDIA_VOLUME_DOWN); }, false, true   },
             {"Hold Vol +",
              [=]() {
                  hid->press(KEY_MEDIA_VOLUME_UP);
                  delay(1000);
                  hid->releaseAll();
-             }                                                            },
-            {"Mute",       [=]() { hid->press(KEY_MEDIA_MUTE); }          },
+             },
+             false,
+             true                                                            },
+            {"Mute",       [=]() { hid->press(KEY_MEDIA_MUTE); }, false, true          },
         };
         addOptionToMainMenu();
         index = loopOptions(options, index);

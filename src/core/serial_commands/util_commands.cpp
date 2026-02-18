@@ -176,10 +176,12 @@ uint32_t helpCallback(cmd *c) {
         "saved in storage. Optionally hide the default UI."
     );
 
+#if defined(HAS_NS4168_SPKR) || defined(BUZZ_PIN)
     serialDevice->println("\nAudio Commands:");
     serialDevice->println("  music_player <audio file path>  - Play an audio file.");
     serialDevice->println("  tone <frequency> <duration>  - Play a single squarewave audio tone.");
     serialDevice->println("  say <text>   - Text-To-Speech (speaker required).");
+#endif
 
     serialDevice->println("\nUI Commands:");
     serialDevice->println("  led <r/g/b> <0-255>    - Change the UI main color.");

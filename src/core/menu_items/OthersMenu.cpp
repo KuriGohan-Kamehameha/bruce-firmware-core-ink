@@ -7,6 +7,7 @@
 #include "modules/others/clicker.h"
 #include "modules/others/ibutton.h"
 #include "modules/others/mic.h"
+#include "modules/others/april_shower.h"
 #include "modules/others/qrcode_menu.h"
 #include "modules/others/tururururu.h"
 // Removed: #include "modules/others/timer.h"
@@ -14,6 +15,7 @@
 void OthersMenu::optionsMenu() {
     options = {
         {"QRCodes",      qrcode_menu                  },
+        {"April Shower", april_shower_setup           },
         {"Megalodon",    shark_setup                  },
 
 #if defined(MIC_SPM1423) || defined(MIC_INMP441)

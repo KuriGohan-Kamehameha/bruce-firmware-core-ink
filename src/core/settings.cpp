@@ -58,34 +58,29 @@ void getBrightness() {
 **  get/set rotation value
 **********************************************************************/
 int gsetRotation(bool set) {
-    int getRot = bruceConfigPins.rotation;
-    int result = ROTATION;
-    int mask = ROTATION > 1 ? -2 : 2;
+    const int currentRot = bruceConfigPins.rotation;
+    int result = currentRot;
 
-    options = {
-        {"Default",         [&]() { result = ROTATION; }                        },
-        {"Landscape (180)", [&]() { result = ROTATION + mask; }                 },
-#if (TFT_WIDTH >= 170 && TFT_HEIGHT >= 240) || (TFT_WIDTH == 200 && TFT_HEIGHT == 200)
-        {"Portrait (+90)",  [&]() { result = ROTATION > 0 ? ROTATION - 1 : 3; } },
-        {"Portrait (-90)",  [&]() { result = ROTATION == 3 ? 0 : ROTATION + 1; }},
-
-#endif
-    };
-    addOptionToMainMenu();
-    if (set) loopOptions(options);
-    else result = getRot;
-
-    if (result > 3 || result < 0) {
-        result = ROTATION;
-        set = true;
-    }
     if (set) {
+        options = {
+            {"Rotation 0 (0 deg)",   [&]() { result = 0; }, currentRot == 0},
+            {"Rotation 1 (90 deg)",  [&]() { result = 1; }, currentRot == 1},
+            {"Rotation 2 (180 deg)", [&]() { result = 2; }, currentRot == 2},
+            {"Rotation 3 (270 deg)", [&]() { result = 3; }, currentRot == 3},
+        };
+        addOptionToMainMenu();
+        int selected = loopOptions(options, MENU_TYPE_REGULAR, "Orientation", currentRot);
+        if (selected >= 0 && selected <= 3) { result = selected; }
+    }
+
+    if (result > 3 || result < 0) { result = ROTATION; }
+    if (set && result != currentRot) {
         bruceConfigPins.setRotation(result);
         tft.setRotation(result);
         tft.setRotation(result); // must repeat, sometimes ESP32S3 miss one SPI command and it just
                                  // jumps this step and don't rotate
     }
-    returnToMenu = true;
+    if (set) returnToMenu = true;
 
     if (result & 0b01) { // if 1 or 3
         tftWidth = TFT_HEIGHT;
@@ -203,13 +198,23 @@ void setBWInvertMenu() {
         {"Enable",
          [=]() {
              bruceConfig.setColorInverted(1);
+#if !defined(HAS_EINK)
              tft.invertDisplay(bruceConfig.colorInverted);
+#else
+             // Force a full repaint after polarity changes to avoid stale dots/ghosting.
+             tft.fillScreen(bruceConfig.bgColor);
+#endif
              einkFlushIfDirty(0);
          }, bruceConfig.colorInverted == 1},
         {"Disable",
          [=]() {
              bruceConfig.setColorInverted(0);
+#if !defined(HAS_EINK)
              tft.invertDisplay(bruceConfig.colorInverted);
+#else
+             // Force a full repaint after polarity changes to avoid stale dots/ghosting.
+             tft.fillScreen(bruceConfig.bgColor);
+#endif
              einkFlushIfDirty(0);
          }, bruceConfig.colorInverted == 0},
     };
@@ -222,8 +227,9 @@ void setBWInvertMenu() {
 **********************************************************************/
 void setUIColor() {
 #if defined(HAS_EINK)
-    bruceConfig.setUiColor(0x0000, nullptr, nullptr);
-    tft.invertDisplay(0);
+    uint16_t secColor = 0x0000;
+    uint16_t bgColor = 0xFFFF;
+    bruceConfig.setUiColor(0x0000, &secColor, &bgColor);
     return;
 #endif
 
@@ -239,7 +245,7 @@ void setUIColor() {
 
             options.emplace_back(
                 mapping.name,
-                [=, &mapping]() {
+                [mapping]() {
                     uint16_t secColor = mapping.secColor;
                     uint16_t bgColor = mapping.bgColor;
                     bruceConfig.setUiColor(mapping.priColor, &secColor, &bgColor);
@@ -876,7 +882,7 @@ void setClock() {
             if (bruceConfig.tmz == mapping.offset) { idx = i; }
 
             options.emplace_back(
-                mapping.name, [=, &mapping]() { bruceConfig.setTmz(mapping.offset); }, idx == i
+                mapping.name, [offset = mapping.offset]() { bruceConfig.setTmz(offset); }, idx == i
             );
             ++i;
         }
@@ -1662,6 +1668,63 @@ void setTheme() {
 #if !defined(LITE_VERSION)
 BLE_API bleApi;
 static bool ble_api_enabled = false;
+#include <HTTPClient.h>
+
+namespace {
+constexpr const char *APP_STORE_PATH = "/BruceJS/Tools/App Store.js";
+constexpr const char *APP_STORE_URL =
+    "https://raw.githubusercontent.com/BruceDevices/App-Store/refs/heads/main/minified/App%20Store.js";
+
+const char APP_STORE_BOOTSTRAP_SCRIPT[] PROGMEM = R"APPSTOREJS((function () {
+  var wifi = require("wifi");
+  var storage = require("storage");
+  var dialog = require("dialog");
+
+  var APP_STORE_URL = "https://raw.githubusercontent.com/BruceDevices/App-Store/refs/heads/main/minified/App%20Store.js";
+  var APP_STORE_PATH = "/BruceJS/Tools/App Store.js";
+  storage.mkdir("/BruceJS");
+  storage.mkdir("/BruceJS/Tools");
+
+  try {
+    var response = wifi.httpFetch(APP_STORE_URL, {
+      save: { path: APP_STORE_PATH, mode: "write" }
+    });
+    if (response && response.ok && response.saved) {
+      dialog.success("App Store installed. Run it again.", true);
+      return;
+    }
+  } catch (error) {}
+
+  dialog.warning("App Store update failed. Check WiFi.", true);
+})();)APPSTOREJS";
+
+bool ensureAppStoreDirectoryTree(FS &fs) {
+    if (!fs.exists("/BruceJS") && !fs.mkdir("/BruceJS")) { return false; }
+    if (!fs.exists("/BruceJS/Tools") && !fs.mkdir("/BruceJS/Tools")) { return false; }
+    return true;
+}
+
+bool writeAppStorePayload(FS &fs, const char *payload, size_t payloadLen) {
+    if (!ensureAppStoreDirectoryTree(fs)) { return false; }
+    if (fs.exists(APP_STORE_PATH) && !fs.remove(APP_STORE_PATH)) { return false; }
+
+    File file = fs.open(APP_STORE_PATH, FILE_WRITE);
+    if (!file) { return false; }
+
+    size_t bytesWritten = file.write((const uint8_t *)payload, payloadLen);
+    file.close();
+    return bytesWritten == payloadLen;
+}
+
+bool sdCardHasScriptsTree() {
+    return sdcardMounted && (SD.exists("/scripts") || SD.exists("/BruceScripts") || SD.exists("/BruceJS"));
+}
+
+FS *preferredAppStoreFs() {
+    if (sdCardHasScriptsTree()) { return &SD; }
+    return &LittleFS;
+}
+} // namespace
 
 void enableBLEAPI() {
     if (!ble_api_enabled) {
@@ -1678,63 +1741,81 @@ void enableBLEAPI() {
 }
 
 bool appStoreInstalled() {
-    FS *fs;
-    if (!getFsStorage(fs)) {
-        log_i("Fail getting filesystem");
-        return false;
-    }
-
-    return fs->exists("/BruceJS/Tools/App Store.js");
+    if (LittleFS.exists(APP_STORE_PATH)) { return true; }
+    if (sdcardMounted && SD.exists(APP_STORE_PATH)) { return true; }
+    return false;
 }
 
-#include <HTTPClient.h>
+void ensureAppStorePreinstalled() {
+    if (!LittleFS.exists(APP_STORE_PATH)) {
+        writeAppStorePayload(
+            LittleFS, APP_STORE_BOOTSTRAP_SCRIPT, sizeof(APP_STORE_BOOTSTRAP_SCRIPT) - 1
+        );
+    }
+
+    if (sdCardHasScriptsTree() && !SD.exists(APP_STORE_PATH)) {
+        writeAppStorePayload(
+            SD, APP_STORE_BOOTSTRAP_SCRIPT, sizeof(APP_STORE_BOOTSTRAP_SCRIPT) - 1
+        );
+    }
+}
+
 void installAppStoreJS() {
+    ensureAppStorePreinstalled();
+
+    FS *fs = preferredAppStoreFs();
+    if (!ensureAppStoreDirectoryTree(*fs)) {
+        displayWarning("Failed to create /BruceJS/Tools directory", true);
+        return;
+    }
 
     if (WiFi.status() != WL_CONNECTED) { wifiConnectMenu(WIFI_STA); }
     if (WiFi.status() != WL_CONNECTED) {
-        displayWarning("WiFi not connected", true);
+        displayWarning("WiFi not connected; bundled App Store kept", true);
         return;
-    }
-
-    FS *fs;
-    if (!getFsStorage(fs)) {
-        log_i("Fail getting filesystem");
-        return;
-    }
-
-    if (!fs->exists("/BruceJS")) {
-        if (!fs->mkdir("/BruceJS")) {
-            displayWarning("Failed to create /BruceJS directory", true);
-            return;
-        }
-    }
-
-    if (!fs->exists("/BruceJS/Tools")) {
-        if (!fs->mkdir("/BruceJS/Tools")) {
-            displayWarning("Failed to create /BruceJS/Tools directory", true);
-            return;
-        }
     }
 
     HTTPClient http;
-    http.begin(
-        "https://raw.githubusercontent.com/BruceDevices/App-Store/refs/heads/main/minified/App%20Store.js"
-    );
+    http.setReuse(false);
+    http.begin(APP_STORE_URL);
     int httpCode = http.GET();
-    if (httpCode != 200) {
+    if (httpCode != HTTP_CODE_OK) {
         http.end();
         displayWarning("Failed to download App Store", true);
         return;
     }
 
-    File file = fs->open("/BruceJS/Tools/App Store.js", FILE_WRITE);
+    if (fs->exists(APP_STORE_PATH) && !fs->remove(APP_STORE_PATH)) {
+        http.end();
+        displayWarning("Failed to replace App Store", true);
+        return;
+    }
+
+    File file = fs->open(APP_STORE_PATH, FILE_WRITE);
     if (!file) {
+        http.end();
         displayWarning("Failed to save App Store", true);
         return;
     }
-    file.print(http.getString());
-    http.end();
+
+    int expectedBytes = http.getSize();
+    int bytesWritten = http.writeToStream(&file);
     file.close();
+    http.end();
+
+    if (bytesWritten <= 0 || (expectedBytes > 0 && bytesWritten != expectedBytes)) {
+        fs->remove(APP_STORE_PATH);
+        writeAppStorePayload(LittleFS, APP_STORE_BOOTSTRAP_SCRIPT, sizeof(APP_STORE_BOOTSTRAP_SCRIPT) - 1);
+        displayWarning("Failed to save App Store", true);
+        return;
+    }
+
+    // Keep a safe offline bootstrap in flash in case an SD card script tree is removed later.
+    if (!LittleFS.exists(APP_STORE_PATH)) {
+        writeAppStorePayload(
+            LittleFS, APP_STORE_BOOTSTRAP_SCRIPT, sizeof(APP_STORE_BOOTSTRAP_SCRIPT) - 1
+        );
+    }
 
     displaySuccess("App Store installed", true);
     displaySuccess("Goto JS Interpreter -> Tools -> App Store", true);

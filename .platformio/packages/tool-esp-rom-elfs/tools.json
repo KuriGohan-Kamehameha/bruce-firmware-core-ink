@@ -1,0 +1,39 @@
+{
+  "tools": [
+    {
+      "description": "ESP ROM ELFs",
+      "export_paths": [
+        [
+          ""
+        ]
+      ],
+      "export_vars": {
+        "ESP_ROM_ELF_DIR": "${TOOL_PATH}/"
+      },
+      "info_url": "https://github.com/espressif/esp-rom-elfs",
+      "install": "always",
+      "is_executable": false,
+      "license": "Apache-2.0",
+      "name": "tool-esp-rom-elfs",
+      "supported_targets": [
+        "all"
+      ],
+      "version_cmd": [
+        ""
+      ],
+      "version_regex": "",
+      "versions": [
+        {
+          "any": {
+            "sha256": "921f000164a421c7628fbfee55b173384aafaa51883adc65cd27bf9b0af9e9a9",
+            "size": 3540038,
+            "url": "https://github.com/espressif/esp-rom-elfs/releases/download/20241011/esp-rom-elfs-20241011.tar.gz"
+          },
+          "name": "20241011",
+          "status": "recommended"
+        }
+      ]
+    }
+  ],
+  "version": 1
+}

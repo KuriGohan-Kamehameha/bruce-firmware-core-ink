@@ -1,0 +1,1 @@
+{"type": "tool", "name": "tool-esp-rom-elfs", "version": "2024.10.11", "spec": {"owner": "pioarduino", "id": null, "name": "tool-esp-rom-elfs", "requirements": null, "uri": "https://github.com/pioarduino/registry/releases/download/0.0.1/esp-rom-elfs-20241011.zip"}}

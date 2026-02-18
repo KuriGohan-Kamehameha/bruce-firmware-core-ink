@@ -91,9 +91,9 @@ bool BruceTheme::openThemeFile(FS *fs, String filepath, bool overwriteConfigSett
         if (!_th["secColor"].isNull()) { _secColor = strtoul(_th["secColor"], nullptr, 16); }
         if (!_th["bgColor"].isNull()) { _bgColor = strtoul(_th["bgColor"], nullptr, 16); }
 #if defined(HAS_EINK)
-        _priColor = 0xFFFF;
-        _secColor = 0xFFFF;
-        _bgColor = 0x0000;
+        _priColor = 0x0000;
+        _secColor = 0x0000;
+        _bgColor = 0xFFFF;
 #endif
         _setUiColor(_priColor, &_secColor, &_bgColor);
 
@@ -127,9 +127,9 @@ void BruceTheme::_setUiColor(uint16_t primary, uint16_t *secondary, uint16_t *ba
     (void)primary;
     (void)secondary;
     (void)background;
-    priColor = 0xFFFF;
-    secColor = 0xFFFF;
-    bgColor = 0x0000;
+    priColor = 0x0000;
+    secColor = 0x0000;
+    bgColor = 0xFFFF;
 #else
     priColor = primary;
     secColor = secondary == nullptr ? primary - 0x2000 : *secondary;
