@@ -14,6 +14,7 @@ Thanks to @bmorcelli for his help doing a better code.
 #include "core/display.h"
 #include "core/mykeyboard.h"
 #include "core/sd_functions.h"
+#include "core/wifi/wifi_common.h"
 #include "spam.h"
 #include "ui.h"
 
@@ -28,6 +29,105 @@ const char *faces[30]; // Increase size if needed
 const char *names[30]; // Increase size if needed
 int num_faces = 0;
 int num_names = 0;
+
+namespace {
+constexpr size_t kMaxSpamEntries = sizeof(faces) / sizeof(faces[0]);
+bool faces_allocated[kMaxSpamEntries] = {false};
+bool names_allocated[kMaxSpamEntries] = {false};
+
+void clearLoadedFacesAndNames() {
+    for (size_t i = 0; i < kMaxSpamEntries; ++i) {
+        if (faces_allocated[i] && faces[i] != nullptr) {
+            free((void *)faces[i]);
+        }
+        if (names_allocated[i] && names[i] != nullptr) {
+            free((void *)names[i]);
+        }
+        faces[i] = nullptr;
+        names[i] = nullptr;
+        faces_allocated[i] = false;
+        names_allocated[i] = false;
+    }
+    num_faces = 0;
+    num_names = 0;
+}
+
+void loadDefaultFacesAndNames() {
+    int i = 0;
+    faces[i++] = "  ><Ô>";
+    faces[i++] = "<Ô><  ";
+    faces[i++] = "(STOP)";
+    faces[i++] = "♬♪♬♪♬♪♬";
+    faces[i++] = "(X‿‿X)";
+    faces[i++] = "(u W u)";
+    faces[i++] = "(BRUCE)";
+    faces[i++] = "(.)(.)";
+    faces[i++] = "ლ(o_oლ)";
+    faces[i++] = "(O﹏o)";
+    faces[i++] = "(✖╭╮✖)";
+    faces[i++] = "SKIDZ!";
+    faces[i++] = "(ɹoɹɹƎ)";
+    faces[i++] = "(H4cK)";
+    faces[i++] = "NOPWND!\n■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■";
+    num_faces = i;
+
+    i = 0;
+    names[i++] = "my name is... BRUCE!";
+    names[i++] = "Check M5 Bruce Project";
+    names[i++] = "┌∩┐(◣_◢)┌∩┐";
+    names[i++] = "(╯°□°)╯╭╮(XoX)";
+    names[i++] = "STOP DEAUTH SKIDZ!";
+    names[i++] = "System Breached oups";
+    names[i++] = "Unauthorized  Access";
+    names[i++] = "Security  Compromised.. reboot";
+    names[i++] = "Warning...Bruce's here";
+    names[i++] = "Critical Error need reboot";
+    names[i++] = "No more Battery";
+    names[i++] = "Never gonna give you up";
+    names[i++] = "Never gonna let you down";
+    names[i++] = "Never gonna run around";
+    names[i++] = "and desert you";
+    names[i++] = "Never gonna make you cry";
+    names[i++] = "Never gonna say goodbye";
+    names[i++] = "Never gonna tell a lie";
+    names[i++] = "and hurt you";
+    num_names = i;
+}
+
+void parseSpamCsv(String values, const char **out, bool *allocatedFlags, int &count) {
+    values.trim();
+    count = 0;
+    if (values.length() == 0) return;
+
+    int start = 0;
+    bool truncated = false;
+    while (start < values.length() && count < static_cast<int>(kMaxSpamEntries)) {
+        int end = values.indexOf(',', start);
+        String token = (end == -1) ? values.substring(start) : values.substring(start, end);
+        token.trim();
+        if (token.length() > 0) {
+            char *dup = strdup(token.c_str());
+            if (!dup) {
+                Serial.println("Failed to allocate memory for spam entry");
+                break;
+            }
+            out[count] = dup;
+            allocatedFlags[count] = true;
+            ++count;
+        }
+        if (end == -1) break;
+        start = end + 1;
+    }
+
+    if (count >= static_cast<int>(kMaxSpamEntries) && start < values.length()) {
+        truncated = true;
+    }
+
+    if (truncated) {
+        Serial.println("Spam entries truncated to fit max list size");
+    }
+}
+} // namespace
 
 // Forward declarations
 void displaySpamStatus();
@@ -55,6 +155,8 @@ String generate_random_identity() {
 }
 
 void send_pwnagotchi_beacon(uint8_t channel, const char *face, const char *name) {
+    if (!face || !name) return;
+
     JsonDocument json;
     json["pal"] = true;
     json["name"] = name;
@@ -81,9 +183,14 @@ void send_pwnagotchi_beacon(uint8_t channel, const char *face, const char *name)
     String json_str;
     serializeJson(json, json_str);
 
-    uint16_t json_len = json_str.length();
-    uint8_t header_len = 2 + ((json_len / 255) * 2);
-    uint8_t beacon_frame[sizeof(beacon_frame_template) + json_len + header_len];
+    size_t json_len = json_str.length();
+    size_t header_len = 2 + ((json_len / 255) * 2);
+    size_t frame_len = sizeof(beacon_frame_template) + json_len + header_len;
+    uint8_t *beacon_frame = (uint8_t *)heap_caps_malloc(frame_len, MALLOC_CAP_8BIT);
+    if (!beacon_frame) {
+        Serial.println("Failed to allocate pwnagotchi beacon frame");
+        return;
+    }
     memcpy(beacon_frame, beacon_frame_template, sizeof(beacon_frame_template));
 
     // Ajout des données JSON à la trame beacon
@@ -100,7 +207,8 @@ void send_pwnagotchi_beacon(uint8_t channel, const char *face, const char *name)
 
     // Définir le canal et envoyer la trame
     esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-    esp_wifi_80211_tx(WIFI_IF_AP, beacon_frame, sizeof(beacon_frame), false);
+    esp_wifi_80211_tx(WIFI_IF_AP, beacon_frame, frame_len, false);
+    free(beacon_frame);
 }
 
 const char *pwnd_faces[] = {
@@ -114,9 +222,9 @@ const char *pwnd_names[] = {
 
 // Tâche pour envoyer des trames beacon avec changement de face, de nom et de canal
 void beacon_task(void *pvParameters) {
+    (void)pvParameters;
     const uint8_t channels[] = {1, 6, 11}; // Liste des canaux Wi-Fi à utiliser
     const int num_channels = sizeof(channels) / sizeof(channels[0]);
-    const int num_pwnd_faces = sizeof(pwnd_faces) / sizeof(pwnd_faces[0]);
 
     while (spamRunning) {
         if (dos_pwnd) {
@@ -127,11 +235,17 @@ void beacon_task(void *pvParameters) {
                 vTaskDelay(200 / portTICK_PERIOD_MS); // Wait 200 ms
             }
         } else {
+            if (num_faces <= 0 || num_names <= 0) {
+                vTaskDelay(200 / portTICK_PERIOD_MS);
+                continue;
+            }
             // Send regular beacons
             for (int i = 0; i < num_faces; ++i) {
                 for (int ch = 0; ch < num_channels; ++ch) {
                     if (stop_beacon) { break; }
-                    send_pwnagotchi_beacon(channels[ch], faces[i], names[i % num_names]);
+                    const char *face = faces[i] ? faces[i] : "(o_o)";
+                    const char *name = names[i % num_names] ? names[i % num_names] : "Bruce";
+                    send_pwnagotchi_beacon(channels[ch], face, name);
                     vTaskDelay(200 / portTICK_PERIOD_MS); // Wait 200 ms
                 }
             }
@@ -182,13 +296,16 @@ void displaySpamStatus() {
         tft.setCursor(125, 45);
         tft.printf("DoScreen:%s", dos_pwnd ? "1" : "0");
         if (!dos_pwnd) {
+            if (num_faces <= 0 || num_names <= 0) {
+                spamRunning = false;
+                break;
+            }
+            const char *face = faces[current_face_index] ? faces[current_face_index] : "(o_o)";
+            const char *name = names[current_name_index] ? names[current_name_index] : "Bruce";
             tft.setCursor(0, 50);
-            tft.printf("Face: \n%s                                              ", faces[current_face_index]);
+            tft.printf("Face: \n%s                                              ", face);
             tft.setCursor(0, 80);
-            tft.printf(
-                "Name:                  \n%s                                              ",
-                names[current_name_index]
-            );
+            tft.printf("Name:                  \n%s                                              ", name);
         } else {
             tft.setCursor(0, 50);
             tft.printf("Face:\nNOPWND!■■■■■■■■■■■■■■■■■");
@@ -199,8 +316,8 @@ void displaySpamStatus() {
         tft.printf("Channel: %d  ", channels[current_channel_index]);
 
         // Update indices for next display
-        current_face_index = (current_face_index + 1) % num_faces;
-        current_name_index = (current_name_index + 1) % num_names;
+        if (num_faces > 0) current_face_index = (current_face_index + 1) % num_faces;
+        if (num_names > 0) current_name_index = (current_name_index + 1) % num_names;
         current_channel_index = (current_channel_index + 1) % num_channels;
 
         vTaskDelay(200 / portTICK_RATE_MS);
@@ -211,147 +328,127 @@ void displaySpamStatus() {
 }
 
 void loadFacesAndNames() {
+    clearLoadedFacesAndNames();
+
     String filepath = "";
     FS *fs = nullptr;
-    num_faces = 0;
-    num_names = 0;
-    bool look_for_file = false;
+    bool show_storage_options = false;
+    bool load_from_file = false;
+
     options = {
-        {"Default faces", [&]() { look_for_file = false; }},
+        {"Default faces", [&]() {
+             load_from_file = false;
+             fs = nullptr;
+         }},
     };
     if (setupSdCard()) {
-        look_for_file = true;
+        show_storage_options = true;
+        load_from_file = true;
         options.push_back({"SD Card", [&]() {
                                fs = &SD;
-                               look_for_file = true;
+                               load_from_file = true;
                            }});
     }
     if (checkLittleFsSizeNM()) {
-        look_for_file = true;
+        show_storage_options = true;
+        load_from_file = true;
         options.push_back({"LittleFS faces", [&]() {
                                fs = &LittleFS;
-                               look_for_file = true;
+                               load_from_file = true;
                            }});
     }
-    if (look_for_file) { loopOptions(options); }
 
-    if (look_for_file == false) {
-    Default: // This is default pwngrid faces to spam, removing the necessity to have a configuration file
-             // previously saved
-        int i = 0;
-        faces[i++] = "  ><Ô>";
-        faces[i++] = "<Ô><  ";
-        faces[i++] = "(STOP)";
-        faces[i++] = "♬♪♬♪♬♪♬";
-        faces[i++] = "(X‿‿X)";
-        faces[i++] = "(u W u)";
-        faces[i++] = "(BRUCE)";
-        faces[i++] = "(.)(.)";
-        faces[i++] = "ლ(o_oლ)";
-        faces[i++] = "(O﹏o)";
-        faces[i++] = "(✖╭╮✖)";
-        faces[i++] = "SKIDZ!";
-        faces[i++] = "(ɹoɹɹƎ)";
-        faces[i++] = "(H4cK)";
-        faces[i++] = "NOPWND!\n■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■";
-        num_faces = i;
-        i = 0;
-        names[i++] = "my name is... BRUCE!";
-        names[i++] = "Check M5 Bruce Project";
-        names[i++] = "┌∩┐(◣_◢)┌∩┐";
-        names[i++] = "(╯°□°)╯╭╮(XoX)";
-        names[i++] = "STOP DEAUTH SKIDZ!";
-        names[i++] = "System Breached oups";
-        names[i++] = "Unauthorized  Access";
-        names[i++] = "Security  Compromised.. reboot";
-        names[i++] = "Warning...Bruce's here";
-        names[i++] = "Critical Error need reboot";
-        names[i++] = "No more Battery";
-        names[i++] = "Never gonna give you up";
-        names[i++] = "Never gonna let you down";
-        names[i++] = "Never gonna run around";
-        names[i++] = "and desert you";
-        names[i++] = "Never gonna make you cry";
-        names[i++] = "Never gonna say goodbye";
-        names[i++] = "Never gonna tell a lie";
-        names[i++] = "and hurt you";
-        num_names = i;
-    } else {
+    if (show_storage_options) { loopOptions(options); }
 
-        filepath = loopSD(*fs, true, "txt");
-        File file;
-        file = (*fs).open(filepath, FILE_READ);
-        if (!file) {
-            Serial.println("Failed to open pwngrid file for reading");
-            return;
+    if (!load_from_file || fs == nullptr) {
+        loadDefaultFacesAndNames();
+        return;
+    }
+
+    filepath = loopSD(*fs, true, "txt");
+    if (filepath.length() == 0) {
+        loadDefaultFacesAndNames();
+        return;
+    }
+
+    File file = (*fs).open(filepath, FILE_READ);
+    if (!file) {
+        Serial.println("Failed to open pwngrid file for reading");
+        loadDefaultFacesAndNames();
+        return;
+    }
+
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        if (line.startsWith("faces=")) {
+            String faces_line = line.substring(6);
+            faces_line.replace("\"", "");
+            faces_line.replace("\\n", "\n");
+            parseSpamCsv(faces_line, faces, faces_allocated, num_faces);
+        } else if (line.startsWith("names=")) {
+            String names_line = line.substring(6);
+            names_line.replace("\"", "");
+            parseSpamCsv(names_line, names, names_allocated, num_names);
         }
+    }
+    file.close();
 
-        while (file.available()) {
-            String line = file.readStringUntil('\n');
-            if (line.startsWith("faces=")) {
-                String faces_line = line.substring(6);
-                faces_line.replace("\"", "");    // Remove quotes
-                faces_line.trim();               // Remove leading/trailing whitespace
-                faces_line.replace("\\n", "\n"); // Handle newline characters
-                int start = 0;
-                int end = faces_line.indexOf(',', start);
-                num_faces = 0;
-                while (end != -1) {
-                    faces[num_faces++] = strdup(faces_line.substring(start, end).c_str());
-                    start = end + 1;
-                    end = faces_line.indexOf(',', start);
-                }
-                faces[num_faces++] = strdup(faces_line.substring(start).c_str());
-            } else if (line.startsWith("names=")) {
-                String names_line = line.substring(6);
-                names_line.replace("\"", ""); // Remove quotes
-                names_line.trim();            // Remove leading/trailing whitespace
-                int start = 0;
-                int end = names_line.indexOf(',', start);
-                num_names = 0;
-                while (end != -1) {
-                    names[num_names++] = strdup(names_line.substring(start, end).c_str());
-                    start = end + 1;
-                    end = names_line.indexOf(',', start);
-                }
-                names[num_names++] = strdup(names_line.substring(start).c_str());
-            }
-        }
-        file.close();
-
-        // If the selected file doesn't contain names and faces, load the default ones
-        if (num_names == 0 || num_faces == 0) {
-            Serial.println(
-                "File " + filepath +
-                " doesn't contain faces and names, check repo/sd_files/pwnagochi/pwngridspam.txt for an "
-                "example."
-            );
-            goto Default;
-        }
+    if (num_names == 0 || num_faces == 0) {
+        Serial.println(
+            "File " + filepath +
+            " doesn't contain faces and names, check repo/sd_files/pwnagochi/pwngridspam.txt for an "
+            "example."
+        );
+        clearLoadedFacesAndNames();
+        loadDefaultFacesAndNames();
     }
 }
 
 void send_pwnagotchi_beacon_main() {
+    ensureWifiPlatform();
+
     // Initialiser NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
+        if (nvs_flash_erase() != ESP_OK) {
+            displayError("NVS erase failed", true);
+            return;
+        }
         ret = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(ret);
+    if (ret != ESP_OK) {
+        displayError("NVS init failed", true);
+        return;
+    }
 
     // Initialiser la configuration Wi-Fi
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_start());
+    ret = esp_wifi_init(&cfg);
+    if (ret != ESP_OK && ret != ESP_ERR_WIFI_INIT_STATE) {
+        displayError("WiFi init failed", true);
+        return;
+    }
+    ret = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    if (ret != ESP_OK) {
+        displayError("WiFi storage error", true);
+        return;
+    }
+    ret = esp_wifi_set_mode(WIFI_MODE_AP);
+    if (ret != ESP_OK) {
+        displayError("WiFi mode error", true);
+        return;
+    }
+    ret = esp_wifi_start();
+    if (ret != ESP_OK && ret != ESP_ERR_WIFI_CONN) {
+        displayError("WiFi start error", true);
+        return;
+    }
 
     // Load faces and names from the file
     loadFacesAndNames();
 
     // Check if file was loaded
-    if (num_faces == 0 or num_names == 0) {
+    if (num_faces == 0 || num_names == 0) {
         displayTextLine("No config file");
         vTaskDelay(1000 / portTICK_RATE_MS);
         return;
@@ -368,4 +465,5 @@ void send_pwnagotchi_beacon_main() {
 
     // Display the spam status and wait for user input
     displaySpamStatus();
+    spamRunning = false;
 }

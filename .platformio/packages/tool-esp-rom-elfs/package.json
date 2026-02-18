@@ -1,0 +1,17 @@
+{
+  "name": "tool-esp-rom-elfs",
+  "description": "Collection of ESP ROM ELFs",
+  "keywords": [
+    "tools",
+    "esp-rom",
+    "espressif",
+    "esp32"
+  ],
+  "license": "GPL-2.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pioarduino/registry"
+  },
+  "version": "2024.10.11",
+  "date": "2024-10-11"
+}

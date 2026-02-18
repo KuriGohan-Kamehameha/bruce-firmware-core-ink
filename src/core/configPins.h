@@ -176,7 +176,8 @@ public:
     UARTPins gps_bus = {(gpio_num_t)GPS_SERIAL_RX, (gpio_num_t)GPS_SERIAL_TX};
 
     // Screen Rotation
-    int rotation = ROTATION > 1 ? 3 : 1;
+    int rotation = ROTATION;
+    bool rotationConfigured = false;
 
     // BLE
     String bleName = String("Keyboard_" + String((uint8_t)(ESP.getEfuseMac() >> 32), HEX));

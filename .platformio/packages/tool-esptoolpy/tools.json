@@ -1,0 +1,46 @@
+{
+  "tools": [
+    {
+      "description": "A serial utility to communicate & flash code to Espressif chips",
+      "export_paths": [
+        [
+          ""
+        ]
+      ],
+      "export_vars": {},
+      "info_url": "https://github.com/pioarduino/esptool",
+      "install": "always",
+      "license": "GPL-2.0-or-later",
+      "name": "tool-esptoolpy",
+      "platform_overrides": [
+        {
+          "install": "always",
+          "platforms": [
+            "win32",
+            "win64"
+          ]
+        }
+      ],
+      "supported_targets": [
+        "all"
+      ],
+      "version_cmd": [
+        "esptool",
+        "--version"
+      ],
+      "version_regex": "([0-9.]+)",
+      "versions": [
+        {
+          "any": {
+            "sha256": "caa5a937f646005b918a32424b52726eaa41370122c657fba35d3b796cf26f85",
+            "size": 480704,
+            "url": "https://github.com/pioarduino/esptool/releases/download/v5.1.0/esptool.zip"
+          },
+          "name": "esptool",
+          "status": "recommended"
+        }
+      ]
+    }
+  ],
+  "version": 1
+}

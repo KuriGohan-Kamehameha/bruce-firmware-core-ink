@@ -1,0 +1,1 @@
+{"type": "tool", "name": "tool-esptoolpy", "version": "5.1.0", "spec": {"owner": "pioarduino", "id": null, "name": "tool-esptoolpy", "requirements": null, "uri": "https://github.com/pioarduino/registry/releases/download/0.0.1/esptoolpy-v5.1.0.zip"}}

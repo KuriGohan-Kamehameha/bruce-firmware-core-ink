@@ -101,7 +101,7 @@ void brucegotchi_start() {
     tft.fillScreen(bruceConfig.bgColor);
     num_HS = 0; // restart pwnagotchi counting
     sniffer_reset_handshake_cache();
-    registeredBeacons.clear();          // Clear the registeredBeacon array in case it has something
+    registeredBeaconsClear();
     vTaskDelay(300 / portTICK_RATE_MS); // Due to select button pressed to enter / quit this feature*
 
     // Prepare storage before enabling promiscuous mode
@@ -144,10 +144,10 @@ void brucegotchi_start() {
         }
         if (millis() - tmp > (2000 + 1000 * _times) && Deauth_done && !pwgrid_done) {
 
-            if (registeredBeacons.size() > 30)
-                registeredBeacons.clear(); // Clear registered beacons to restart search and avoir restarts
+            if (registeredBeaconsSize() > 30) registeredBeaconsClear();
+            std::vector<BeaconList> beaconSnapshot = registeredBeaconsSnapshot();
             // Serial.println("<<---- Starting Deauthentication Process ---->>");
-            for (auto registeredBeacon : registeredBeacons) {
+            for (const auto &registeredBeacon : beaconSnapshot) {
                 char _MAC[20];
                 sprintf(
                     _MAC,
