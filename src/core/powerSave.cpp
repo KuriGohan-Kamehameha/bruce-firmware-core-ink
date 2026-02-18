@@ -15,13 +15,10 @@ void fadeOutScreen(int startValue) {
 
 void checkPowerSaveTime() {
 #if defined(HAS_EINK)
-    // E-ink displays don't need dimmer logic; just check for full sleep
-    if (bruceConfig.dimmerSet == 0) return;
-    unsigned long elapsed = millis() - previousMillis;
-    int dimmerSetMs = bruceConfig.dimmerSet * 1000;
-    if (elapsed >= (dimmerSetMs + SCREEN_OFF_DELAY) && !isScreenOff && !isSleeping) {
-        isScreenOff = true;
-    }
+    // CoreInk has no backlight and no screen timeout handling.
+    dimmer = false;
+    isScreenOff = false;
+    return;
 #else
     if (bruceConfig.dimmerSet == 0) return;
 

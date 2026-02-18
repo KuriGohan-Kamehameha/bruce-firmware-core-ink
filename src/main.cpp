@@ -152,7 +152,9 @@ volatile int tftHeight = VECTOR_DISPLAY_DEFAULT_WIDTH;
 #include "core/wifi/webInterface.h"
 #include "core/wifi/wifi_common.h"
 #include "modules/bjs_interpreter/interpreter.h" // for JavaScript interpreter
-#include "modules/others/audio.h"                // for playAudioFile
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+#include "modules/others/audio.h" // for playAudioFile / _tone
+#endif
 #include "modules/rf/rf_utils.h"                 // for initCC1101once
 #include <Wire.h>
 
@@ -165,6 +167,13 @@ void begin_storage() {
     bool checkFS = setupSdCard();
     bruceConfig.fromFile(checkFS);
     bruceConfigPins.fromFile(checkFS);
+#if !defined(BUZZ_PIN) && !defined(HAS_NS4168_SPKR)
+    // Boards without an audio output keep sound disabled to avoid dead-end audio paths.
+    if (bruceConfig.soundEnabled != 0) { bruceConfig.setSoundEnabled(0); }
+#endif
+#if !defined(LITE_VERSION)
+    ensureAppStorePreinstalled();
+#endif
 }
 
 /*********************************************************************
@@ -211,8 +220,23 @@ void setup_gpio() {
  **  Config tft
  *********************************************************************/
 void begin_tft() {
+#if defined(HAS_EINK)
+    // Apply board default rotation once on first run, then keep user-selected rotation.
+    if (!bruceConfigPins.rotationConfigured) { bruceConfigPins.setRotation(ROTATION); }
+    // Keep a deterministic monochrome base theme for e-ink rendering.
+    if (bruceConfig.priColor != 0x0000 || bruceConfig.secColor != 0x0000 || bruceConfig.bgColor != 0xFFFF) {
+        uint16_t secColor = 0x0000;
+        uint16_t bgColor = 0xFFFF;
+        bruceConfig.setUiColor(0x0000, &secColor, &bgColor);
+    }
+    if (bruceConfig.colorInverted != 0) { bruceConfig.setColorInverted(0); }
+#endif
     tft.setRotation(bruceConfigPins.rotation); // sometimes it misses the first command
+#if defined(HAS_EINK)
+    tft.invertDisplay(false);
+#else
     tft.invertDisplay(bruceConfig.colorInverted);
+#endif
     tft.setRotation(bruceConfigPins.rotation);
 #if defined(HAS_EINK)
     tft.setAutoDisplay(false);
@@ -237,7 +261,9 @@ void begin_tft() {
 void boot_screen() {
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.setTextSize(FM);
+#if !defined(HAS_EINK)
     tft.drawPixel(0, 0, bruceConfig.bgColor);
+#endif
     tft.drawCentreString("Bruce", tftWidth / 2, 10, 1);
     tft.setTextSize(FP);
     tft.drawCentreString(BRUCE_VERSION, tftWidth / 2, 25, 1);
@@ -254,9 +280,6 @@ void boot_screen() {
 void boot_screen_anim() {
 #if defined(HAS_EINK)
     boot_screen();
-    einkFlushIfDirty(0);
-    delay(500);
-    tft.fillScreen(bruceConfig.bgColor);
     einkFlushIfDirty(0);
     return;
 #endif
@@ -450,12 +473,13 @@ void setup() {
 #if defined(HAS_SCREEN)
     tft.init();
     tft.setRotation(bruceConfigPins.rotation);
-    tft.fillScreen(TFT_BLACK);
 #if defined(HAS_EINK)
     tft.fillScreen(TFT_WHITE);
+    tft.setTextWrap(false);
     // bruceConfig is not read yet.. just to show something on screen due to long boot time
     tft.setTextColor(TFT_BLACK, TFT_WHITE);
 #else
+    tft.fillScreen(TFT_BLACK);
     // bruceConfig is not read yet.. just to show something on screen due to long boot time
     tft.setTextColor(TFT_PURPLE, TFT_BLACK);
 #endif
@@ -502,9 +526,6 @@ void setup() {
 #if defined(HAS_SCREEN)
 #if !defined(HAS_EINK)
     bruceConfig.openThemeFile(bruceConfig.themeFS(), bruceConfig.themePath, false);
-#else
-    tft.fillScreen(0xFFFF);
-    einkFlushIfDirty(0);
 #endif
     if (!bruceConfig.instantBoot) { startup_sound(); }
     if (bruceConfig.wifiAtStartup) {

@@ -317,7 +317,7 @@ void setLedColorConfig() {
 
             options.emplace_back(
                 mapping.name,
-                [=, &mapping]() {
+                [mapping]() {
                     // bruceConfig.setLedColor(mapping.color);
                     bruceConfig.setLedColor(
                         ((uint32_t)mapping.color.r << 16) | ((uint32_t)mapping.color.g << 8) |

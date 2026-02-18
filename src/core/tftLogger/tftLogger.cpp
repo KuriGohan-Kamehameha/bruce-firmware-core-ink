@@ -281,9 +281,40 @@ void tft_logger::markDirty() {
 
 uint16_t tft_logger::mapColor(uint32_t color) {
 #if defined(HAS_EINK)
-    // Map to pure white (0xFFFF) or black (0x0000)
-    uint16_t mapped = color == 0xFFFF ? 0xFFFF : 0x0000;
-    // Apply invert if enabled
+    if (color == 0x00000000u || color == 0x0000u) {
+        return bruceConfig.colorInverted ? 0xFFFF : 0x0000;
+    }
+    if (color == 0xFFFFFFFFu || color == 0x00FFFFFFu || color == 0x0000FFFFu || color == 0xFFFFu) {
+        return bruceConfig.colorInverted ? 0x0000 : 0xFFFF;
+    }
+    // Cyan-like values are treated as white on monochrome panels.
+    if (color == 0x07FFu || color == 0x00FFFFu) { return bruceConfig.colorInverted ? 0x0000 : 0xFFFF; }
+
+    // Convert any incoming color format into strict black/white to avoid dither artifacts.
+    uint8_t r8 = 0;
+    uint8_t g8 = 0;
+    uint8_t b8 = 0;
+
+    if ((color & 0xFFFFFF00u) == 0u) {
+        r8 = g8 = b8 = static_cast<uint8_t>(color);
+    } else if ((color & 0xFFFF0000u) != 0u) {
+        uint32_t rgb888 = color & 0x00FFFFFFu;
+        r8 = static_cast<uint8_t>((rgb888 >> 16) & 0xFFu);
+        g8 = static_cast<uint8_t>((rgb888 >> 8) & 0xFFu);
+        b8 = static_cast<uint8_t>(rgb888 & 0xFFu);
+    } else {
+        uint16_t rgb565 = static_cast<uint16_t>(color & 0xFFFFu);
+        uint8_t r5 = (rgb565 >> 11) & 0x1Fu;
+        uint8_t g6 = (rgb565 >> 5) & 0x3Fu;
+        uint8_t b5 = rgb565 & 0x1Fu;
+        r8 = static_cast<uint8_t>((r5 * 255u) / 31u);
+        g8 = static_cast<uint8_t>((g6 * 255u) / 63u);
+        b8 = static_cast<uint8_t>((b5 * 255u) / 31u);
+    }
+
+    uint16_t luma = static_cast<uint16_t>((r8 * 30u + g8 * 59u + b8 * 11u) / 100u);
+
+    uint16_t mapped = (luma >= 128u) ? 0xFFFF : 0x0000;
     if (bruceConfig.colorInverted) { mapped = mapped == 0xFFFF ? 0x0000 : 0xFFFF; }
     return mapped;
 #else
@@ -586,9 +617,6 @@ int16_t tft_logger::drawString(const String &string, int32_t x, int32_t y, uint8
     int16_t r;
     if (isSleeping) return string.length();
     r = BRUCE_TFT_DRIVER::drawString(clean, x, y, font);
-#if defined(HAS_EINK)
-    BRUCE_TFT_DRIVER::drawString(clean, x + 1, y, font);
-#endif
     markDirty();
     restoreLogger();
     return r;
@@ -600,9 +628,6 @@ int16_t tft_logger::drawCentreString(const String &string, int32_t x, int32_t y,
     int16_t r;
     if (isSleeping) return string.length();
     r = BRUCE_TFT_DRIVER::drawCentreString(clean, x, y, font);
-#if defined(HAS_EINK)
-    BRUCE_TFT_DRIVER::drawCentreString(clean, x + 1, y, font);
-#endif
     markDirty();
     restoreLogger();
     return r;
@@ -614,9 +639,6 @@ int16_t tft_logger::drawRightString(const String &string, int32_t x, int32_t y, 
     int16_t r;
     if (isSleeping) return string.length();
     r = BRUCE_TFT_DRIVER::drawRightString(clean, x, y, font);
-#if defined(HAS_EINK)
-    BRUCE_TFT_DRIVER::drawRightString(clean, x + 1, y, font);
-#endif
     markDirty();
     restoreLogger();
     return r;
@@ -671,18 +693,7 @@ size_t tft_logger::print(const String &s) {
         log_print(chunk);
         if (isSleeping) totalPrinted += chunk.length();
         else {
-#if defined(HAS_EINK)
-            int16_t startX = getCursorX();
-            int16_t startY = getCursorY();
             totalPrinted += BRUCE_TFT_DRIVER::print(chunk);
-            int16_t endX = getCursorX();
-            int16_t endY = getCursorY();
-            BRUCE_TFT_DRIVER::setCursor(startX + 1, startY);
-            BRUCE_TFT_DRIVER::print(chunk);
-            BRUCE_TFT_DRIVER::setCursor(endX, endY);
-#else
-            totalPrinted += BRUCE_TFT_DRIVER::print(chunk);
-#endif
             markDirty();
         }
 

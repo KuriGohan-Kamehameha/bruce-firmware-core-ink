@@ -64,6 +64,7 @@ JsonDocument BruceConfig::toJson() const {
     setting["wigleBasicToken"] = wigleBasicToken;
     setting["devMode"] = devMode;
     setting["colorInverted"] = colorInverted;
+    setting["rockerInverted"] = rockerInverted;
 
     setting["badUSBBLEKeyboardLayout"] = badUSBBLEKeyboardLayout;
     setting["badUSBBLEKeyDelay"] = badUSBBLEKeyDelay;
@@ -366,6 +367,12 @@ void BruceConfig::fromFile(bool checkFS) {
         count++;
         log_e("Fail");
     }
+    if (!setting["rockerInverted"].isNull()) {
+        rockerInverted = setting["rockerInverted"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
 
     if (!setting["badUSBBLEKeyboardLayout"].isNull()) {
         badUSBBLEKeyboardLayout = setting["badUSBBLEKeyboardLayout"].as<int>();
@@ -467,16 +474,16 @@ void BruceConfig::validateConfig() {
     validateMifareKeysItems();
     validateDevModeValue();
     validateColorInverted();
+    validateRockerInvertedValue();
     validateBadUSBBLEKeyboardLayout();
     validateBadUSBBLEKeyDelay();
     validateEvilEndpointCreds();
     validateEvilEndpointSsid();
     validateEvilPasswordMode();
 #if defined(HAS_EINK)
-    priColor = 0xFFFF;
-    secColor = 0xFFFF;
-    bgColor = 0x0000;
-    colorInverted = 0;
+    priColor = 0x0000;
+    secColor = 0x0000;
+    bgColor = 0xFFFF;
 #endif
 }
 
@@ -761,6 +768,17 @@ void BruceConfig::setColorInverted(int value) {
 void BruceConfig::validateColorInverted() {
     if (colorInverted > 1) colorInverted = 1;
     if (colorInverted < 0) colorInverted = 0;
+}
+
+void BruceConfig::setRockerInverted(int value) {
+    rockerInverted = value;
+    validateRockerInvertedValue();
+    saveFile();
+}
+
+void BruceConfig::validateRockerInvertedValue() {
+    if (rockerInverted > 1) rockerInverted = 1;
+    if (rockerInverted < 0) rockerInverted = 0;
 }
 
 void BruceConfig::setBadUSBBLEKeyboardLayout(int value) {

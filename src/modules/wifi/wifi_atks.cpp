@@ -542,7 +542,7 @@ void capture_handshake(String tssid, String mac, uint8_t channel) {
         BeaconList targetBeacon;
         memcpy(targetBeacon.MAC, bssid_array, 6);
         targetBeacon.channel = channel;
-        if (registeredBeacons.find(targetBeacon) != registeredBeacons.end()) { hasBeacons = true; }
+        if (registeredBeaconContains(targetBeacon)) { hasBeacons = true; }
 
         // Redraw whenever new EAPOL Frame arrives
         if (num_EAPOL > prevNumEAPOL) {

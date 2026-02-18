@@ -12,6 +12,7 @@ Thanks to @bmorcelli (Pirata) for his help doing a better code.
 #include "pwngrid.h"
 #include "../wifi/sniffer.h"
 #include "core/wifi/wifi_common.h"
+#include <algorithm>
 
 uint8_t pwngrid_friends_tot = 0;
 std::vector<pwngrid_peer> pwngrid_peers;
@@ -24,24 +25,26 @@ std::vector<pwngrid_peer> getPwngridPeers() { return pwngrid_peers; }
 
 // Add pwngrid peers
 void add_new_peer(JsonDocument &json, signed int rssi) {
+    String identity = json["identity"] | "";
+    if (identity.length() == 0) return;
+
     // Check if it exists in the list
-    bool exists = false;
-    for (auto peer_list : pwngrid_peers) {
-        if (peer_list.identity == json["identity"].as<String>()) {
-            exists = true;
+    for (auto &peer_list : pwngrid_peers) {
+        if (peer_list.identity == identity) {
             peer_list.last_ping = millis();
             peer_list.gone = false;
             peer_list.rssi = rssi;
+            pwngrid_last_friend_name = peer_list.name;
             return;
         }
     }
     // Check if doesn't exists AND there are room in RAM memory to save
-    if (!exists && pwngrid_peers.size() < 50) {
+    if (pwngrid_peers.size() < 50) {
         pwngrid_peers.push_back((pwngrid_peer){
             json["epoch"].as<int>(),
             json["face"].as<String>(),
             json["grid_version"].as<String>(),
-            json["identity"].as<String>(),
+            identity,
             json["name"].as<String>(),
             json["pwnd_run"].as<int>(),
             json["pwnd_tot"].as<int>(),
@@ -179,10 +182,10 @@ esp_err_t pwngridAdvertise(uint8_t channel, String face) {
 const int away_threshold = 120000;
 
 void checkPwngridGoneFriends() {
-    for (auto peer_list : pwngrid_peers) {
+    for (auto &peer_list : pwngrid_peers) {
         // Check if peer is away
-        int away_secs = peer_list.last_ping - millis();
-        if (away_secs > away_threshold) {
+        uint32_t away_ms = millis() - peer_list.last_ping;
+        if (away_ms > static_cast<uint32_t>(away_threshold)) {
             peer_list.gone = true;
             delete_peer_gone();
             return;
@@ -193,7 +196,7 @@ void checkPwngridGoneFriends() {
 signed int getPwngridClosestRssi() {
     signed int closest = -1000;
 
-    for (auto peer_list : pwngrid_peers) {
+    for (const auto &peer_list : pwngrid_peers) {
         // Check if peer is away
         if (peer_list.gone == false && peer_list.rssi > closest) { closest = peer_list.rssi; }
     }
@@ -233,16 +236,23 @@ void getMAC(char *addr, uint8_t *data, uint16_t offset) {
 }
 
 void pwnSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
+    if (!buf) return;
+
     sniffer(buf, type);
+    if (type != WIFI_PKT_MGMT) return;
+
     wifi_promiscuous_pkt_t *snifferPacket = (wifi_promiscuous_pkt_t *)buf;
-    WifiMgmtHdr *frameControl = (WifiMgmtHdr *)snifferPacket->payload;
+    if (snifferPacket->rx_ctrl.sig_len < 4) return;
+
+    int len = snifferPacket->rx_ctrl.sig_len - 4; // Remove FCS bytes
+    if (len < 24) return;
 
     const uint8_t *frame = snifferPacket->payload;
     const uint16_t frameCtrl = (uint16_t)frame[0] | ((uint16_t)frame[1] << 8);
     const uint8_t frameType = (frameCtrl & 0x0C) >> 2;
     const uint8_t frameSubType = (frameCtrl & 0xF0) >> 4;
 
-    if (frameType == 0x00 && frameSubType == 0x08) {
+    if (frameType == 0x00 && frameSubType == 0x08 && len >= 24) {
         const uint8_t *addr1 = snifferPacket->payload + 4;  // Adresse du destinataire (Adresse 1)
         const uint8_t *addr2 = snifferPacket->payload + 10; // Adresse de l'expéditeur (Adresse 2)
         const uint8_t *bssid = snifferPacket->payload + 16; // Adresse BSSID (Adresse 3)
@@ -256,52 +266,43 @@ void pwnSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
         BeaconList Beacon;
         memcpy(Beacon.MAC, apAddr, 6);
         Beacon.channel = ch;
-        if (registeredBeacons.find(Beacon) == registeredBeacons.end()) {
-            registeredBeacons.insert(Beacon); // Save a new MAC to Deauth
-        }
+        if (!registeredBeaconContains(Beacon)) { registeredBeaconInsert(Beacon); }
     }
 
     String src = "";
     String essid = "";
 
-    if (type == WIFI_PKT_MGMT) {
-        // Remove frame check sequence bytes
-        int len = snifferPacket->rx_ctrl.sig_len - 4;
-        int fctl = ntohs(frameControl->fctl);
-        const wifi_ieee80211_packet_t *ipkt = (wifi_ieee80211_packet_t *)snifferPacket->payload;
-        const WifiMgmtHdr *hdr = &ipkt->hdr;
+    // if ((snifferPacket->payload[0] == 0x80) && (buf == 0)) {
+    if ((snifferPacket->payload[0] == 0x80) && len > 38) {
+        char addr[] = "00:00:00:00:00:00";
+        getMAC(addr, snifferPacket->payload, 10);
+        src.concat(addr);
+        if (src == "de:ad:be:ef:de:ad") {
+            const int max_payload_scan = 512;
+            int end = std::min(len, 38 + max_payload_scan);
 
-        // if ((snifferPacket->payload[0] == 0x80) && (buf == 0)) {
-        if ((snifferPacket->payload[0] == 0x80)) {
-            char addr[] = "00:00:00:00:00:00";
-            getMAC(addr, snifferPacket->payload, 10);
-            src.concat(addr);
-            if (src == "de:ad:be:ef:de:ad") {
-                // Just grab the first 255 bytes of the pwnagotchi beacon
-                // because that is where the name is
-                for (int i = 38; i < len; i++) {
-                    if (isAscii(snifferPacket->payload[i])) { essid.concat((char)snifferPacket->payload[i]); }
-                }
+            for (int i = 38; i < end; i++) {
+                if (isAscii(snifferPacket->payload[i])) { essid.concat((char)snifferPacket->payload[i]); }
+            }
 
-                JsonDocument sniffed_json; // ArduinoJson v6s
-                DeserializationError result = deserializeJson(sniffed_json, essid);
+            JsonDocument sniffed_json; // ArduinoJson v6s
+            DeserializationError result = deserializeJson(sniffed_json, essid);
 
-                if (result == DeserializationError::Ok) {
-                    // Serial.println("\nSuccessfully parsed json");
-                    // serializeJson(json, Serial);  // ArduinoJson v6
-                    add_new_peer(sniffed_json, snifferPacket->rx_ctrl.rssi);
-                } else if (result == DeserializationError::IncompleteInput) {
-                    Serial.println("Deserialization error: incomplete input");
-                } else if (result == DeserializationError::NoMemory) {
-                    Serial.println("Deserialization error: no memory");
-                } else if (result == DeserializationError::InvalidInput) {
-                    Serial.println("Deserialization error: invalid input");
-                } else if (result == DeserializationError::TooDeep) {
-                    Serial.println("Deserialization error: too deep");
-                } else {
-                    Serial.println(essid);
-                    Serial.println("Deserialization error");
-                }
+            if (result == DeserializationError::Ok) {
+                // Serial.println("\nSuccessfully parsed json");
+                // serializeJson(json, Serial);  // ArduinoJson v6
+                add_new_peer(sniffed_json, snifferPacket->rx_ctrl.rssi);
+            } else if (result == DeserializationError::IncompleteInput) {
+                Serial.println("Deserialization error: incomplete input");
+            } else if (result == DeserializationError::NoMemory) {
+                Serial.println("Deserialization error: no memory");
+            } else if (result == DeserializationError::InvalidInput) {
+                Serial.println("Deserialization error: invalid input");
+            } else if (result == DeserializationError::TooDeep) {
+                Serial.println("Deserialization error: too deep");
+            } else {
+                Serial.println(essid);
+                Serial.println("Deserialization error");
             }
         }
     }

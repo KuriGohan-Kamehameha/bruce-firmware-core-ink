@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 import glob
 import gzip
+import re
 from os import makedirs, remove, rename
 from os.path import basename, dirname, exists, isfile, join
 
@@ -199,4 +200,56 @@ def prepare_www_files():
     print(f"[DONE] Gzipped files embedded into {HEADER_FILE}")
 
 
+def patch_coreink_epd_binary_extremes():
+    """Patch M5GFX CoreInk panels to use strict binary thresholding (no Bayer dithering)."""
+    libdeps_dir = env.subst("$PROJECT_LIBDEPS_DIR")
+    pioenv = env.subst("$PIOENV")
+    panel_dir = join(libdeps_dir, pioenv, "M5GFX", "src", "lgfx", "v1", "panel")
+    targets = [
+        join(panel_dir, "Panel_GDEW0154D67.cpp"),
+        join(panel_dir, "Panel_GDEW0154M09.cpp"),
+    ]
+
+    # Keep ordered replacements idempotent and easy to verify.
+    # The first two rules handle upstream sources, and the latter two handle already patched sources.
+    replacements = [
+        (
+            r"(\s*)bool flg = 256 <= value \+ btbl\[x & 3\];",
+            r"\1bool flg = (value >= 128);",
+        ),
+        (
+            r"(\s*)bool flg = 256 <= value \+ Bayer\[\(x & 3\) \| \(y & 3\) << 2\];",
+            r"\1bool flg = (value >= 128);",
+        ),
+        (
+            r"(\s*)bool flg;\n\s*if \(value == 0\) flg = false;\n\s*else if \(value >= 255\) flg = true;\n\s*else flg = 256 <= value \+ btbl\[x & 3\];",
+            r"\1bool flg = (value >= 128);",
+        ),
+        (
+            r"(\s*)bool flg;\n\s*if \(value == 0\) flg = false;\n\s*else if \(value >= 255\) flg = true;\n\s*else flg = 256 <= value \+ Bayer\[\(x & 3\) \| \(y & 3\) << 2\];",
+            r"\1bool flg = (value >= 128);",
+        ),
+    ]
+
+    for path in targets:
+        if not isfile(path):
+            print(f"[EPD PATCH] Target not found, skipping: {path}")
+            continue
+
+        with open(path, "r", encoding="utf-8") as fp:
+            content = fp.read()
+
+        original = content
+        for pattern, replacement in replacements:
+            content, _count = re.subn(pattern, replacement, content)
+
+        if content != original:
+            with open(path, "w", encoding="utf-8") as fp:
+                fp.write(content)
+            print(f"[EPD PATCH] Patched {basename(path)} for strict 1-bit thresholding.")
+        else:
+            print(f"[EPD PATCH] Already patched: {basename(path)}")
+
+
+patch_coreink_epd_binary_extremes()
 prepare_www_files()
