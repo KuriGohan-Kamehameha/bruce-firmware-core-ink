@@ -16,6 +16,8 @@ int gsetRotation(bool set = false);
 
 void setBrightnessMenu();
 void setEinkRefreshMenu();
+void setEinkRefreshDrawsMenu();
+void setAutoPowerOffMenu();
 
 void setUIColor();
 
@@ -64,6 +66,7 @@ void setBWInvertMenu();
 void setClock();
 
 void runClockLoop(bool showMenuHint = false);
+void runAnalogClockLoop(bool showMenuHint = false);
 
 int gsetIrTxPin(bool set = false);
 

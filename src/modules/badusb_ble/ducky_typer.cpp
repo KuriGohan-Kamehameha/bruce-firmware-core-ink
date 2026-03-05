@@ -6,6 +6,10 @@
 #if defined(USB_as_HID)
 #include "tusb.h"
 #endif
+#if defined(ARDUINO_M5STACK_COREINK)
+#include <driver/gpio.h>
+#include <esp_sleep.h>
+#endif
 
 #define DEF_DELAY 100
 
@@ -701,6 +705,258 @@ void MediaCommands(HIDInterface *hid, bool ble) {
         if (!returnToMenu) goto reMenu;
     }
     returnToMenu = true;
+}
+
+void MediaCommandsCoreInk(HIDInterface *&hid, bool ble) {
+#if !defined(ARDUINO_M5STACK_COREINK)
+    MediaCommands(hid, ble);
+#else
+    if (!ble) {
+        MediaCommands(hid, ble);
+        return;
+    }
+
+    if (_Ask_for_restart == 2) {
+        displayError("Restart your Device");
+        delay(1000);
+        return;
+    }
+
+    ducky_startKb(hid, ble);
+    displayTextLine("Pairing...");
+
+    while (!hid->isConnected() && !check(EscPress)) { delay(20); }
+    if (!hid->isConnected()) {
+        displayWarning("Canceled", true);
+        returnToMenu = true;
+        return;
+    }
+
+    BLEConnected = true;
+
+    constexpr uint32_t kDoublePressWindowMs = 320;
+    constexpr uint32_t kInputSettleMs = 220;
+    constexpr uint32_t kWakeSettleMs = 350;
+    constexpr uint32_t kMediaCmdDebounceMs = 170;
+
+    bool trackMode = false;
+    bool rockerLocked = false;
+    bool pendingSel = false;
+    uint32_t pendingSelMs = 0;
+    uint32_t ignoreInputUntilMs = millis() + kInputSettleMs;
+    uint32_t lastMediaCmdMs = 0;
+
+    auto tapMedia = [&](const MediaKeyReport key) -> bool {
+        uint32_t now = millis();
+        if ((now - lastMediaCmdMs) < kMediaCmdDebounceMs) return false;
+        hid->press(key);
+        delay(35);
+        hid->releaseAll();
+        lastMediaCmdMs = millis();
+        return true;
+    };
+
+    auto drainInputQueue = [&]() {
+        check(AuxPress);
+        check(SelPress);
+        check(EscPress);
+        check(NextPress);
+        check(PrevPress);
+    };
+
+    auto drawWrappedCentered = [&](const String &text, int &y, int textSize, int maxLines = 2) {
+        int maxChars = (tftWidth - 2 * (BORDER_PAD_X + 8)) / (textSize * LW);
+        if (maxChars < 4) maxChars = 4;
+
+        String remaining = text;
+        int lines = 0;
+        while (!remaining.isEmpty() && lines < maxLines) {
+            String line;
+            if (remaining.length() <= static_cast<size_t>(maxChars)) {
+                line = remaining;
+                remaining = "";
+            } else {
+                int split = maxChars;
+                while (split > 0 && remaining[split] != ' ') { --split; }
+                if (split == 0) split = maxChars;
+
+                line = remaining.substring(0, split);
+                remaining.remove(0, split);
+                line.trim();
+                remaining.trim();
+
+                if (line.isEmpty()) {
+                    line = remaining.substring(0, maxChars);
+                    remaining.remove(0, maxChars);
+                    remaining.trim();
+                }
+            }
+
+            tft.drawCentreString(line, tftWidth / 2, y, SMOOTH_FONT);
+            y += textSize * LH + 2;
+            ++lines;
+        }
+
+        if (!remaining.isEmpty()) {
+            String ellipsis = remaining;
+            if (ellipsis.length() > static_cast<size_t>(maxChars - 3)) {
+                ellipsis = ellipsis.substring(0, maxChars - 3) + "...";
+            }
+            tft.drawCentreString(ellipsis, tftWidth / 2, y, SMOOTH_FONT);
+            y += textSize * LH + 2;
+        }
+    };
+
+    auto sleepAndWakeOnG5 = [&]() -> bool {
+        constexpr gpio_num_t kWakePin = GPIO_NUM_5;
+#if defined(SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP) && SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
+        // Chips that support deep-sleep GPIO wake can use true deep sleep on G5.
+        esp_deep_sleep_enable_gpio_wakeup(1ULL << kWakePin, ESP_GPIO_WAKEUP_GPIO_LOW);
+        esp_deep_sleep_start();
+        return false;
+#else
+        // Classic ESP32 can't deep-sleep wake on GPIO5 (non-RTC), so use light sleep here.
+        gpio_wakeup_enable(kWakePin, GPIO_INTR_LOW_LEVEL);
+        esp_sleep_enable_gpio_wakeup();
+        esp_light_sleep_start();
+        esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
+        gpio_wakeup_disable(kWakePin);
+        M5.update();
+        return true;
+#endif
+    };
+
+    const int panelX = BORDER_PAD_X;
+    const int panelY = BORDER_PAD_Y + FM * LH + 4;
+    const int panelW = tftWidth - 2 * BORDER_PAD_X;
+    const int panelH = tftHeight - panelY - BORDER_PAD_X;
+    const int statusX = panelX + 6;
+    const int statusY = panelY + 8;
+    const int statusW = panelW - 12;
+    const int statusH = 2 * FP * LH + 8;
+    const int hintsY = statusY + statusH + 10;
+
+    bool statusDrawn = false;
+    bool lastDrawnTrackMode = trackMode;
+    bool lastDrawnRockerLocked = rockerLocked;
+
+    auto drawStatus = [&](bool force = false) {
+        if (!force && statusDrawn && lastDrawnTrackMode == trackMode && lastDrawnRockerLocked == rockerLocked) {
+            return;
+        }
+
+        tft.fillRoundRect(statusX, statusY, statusW, statusH, 6, bruceConfig.bgColor);
+        tft.drawRoundRect(statusX, statusY, statusW, statusH, 6, bruceConfig.priColor);
+        tft.setTextSize(FP);
+        tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+
+        String modeLine = String("Mode: ") + (trackMode ? "Track" : "Volume") + "  Lock: " +
+                          (rockerLocked ? "On" : "Off");
+        int y = statusY + 3;
+        drawWrappedCentered(modeLine, y, FP, 1);
+        String mapLine = trackMode ? "Left/Right: Prev/Next" : "Left/Right: Vol-/+";
+        drawWrappedCentered(mapLine, y, FP, 1);
+
+        lastDrawnTrackMode = trackMode;
+        lastDrawnRockerLocked = rockerLocked;
+        statusDrawn = true;
+        einkFlushIfDirty(120);
+    };
+
+    auto drawStaticUI = [&]() {
+        drawMainBorderWithTitle("Media Remote");
+        tft.drawRoundRect(panelX, panelY, panelW, panelH, 8, bruceConfig.priColor);
+        tft.drawFastHLine(panelX + 8, hintsY - 6, panelW - 16, bruceConfig.priColor);
+
+        tft.setTextSize(FP);
+        tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+        const char *lines[] = {"G5: Play/Pause", "Tap Ctr: Mode", "2x Ctr: Lock Rocker", "Hold Ctr: Sleep"};
+        constexpr int lineCount = sizeof(lines) / sizeof(lines[0]);
+        int y = hintsY;
+
+        for (int i = 0; i < lineCount; ++i) {
+            drawWrappedCentered(String(lines[i]), y, FP, 1);
+        }
+
+        drawWrappedCentered("Rocker follows selected mode.", y, FP, 2);
+        einkFlushIfDirty(0);
+    };
+
+    drainInputQueue();
+    drawStaticUI();
+    drawStatus(true);
+
+    while (hid->isConnected()) {
+        if (millis() < ignoreInputUntilMs) {
+            drainInputQueue();
+            delay(10);
+            continue;
+        }
+
+        bool uiChanged = false;
+
+        if (check(AuxPress)) {
+            (void)tapMedia(KEY_MEDIA_PLAY_PAUSE);
+            check(EscPress); // G5 is globally mapped to Esc; consume it in this app.
+        }
+
+        if (check(SelPress)) {
+            uint32_t now = millis();
+            if (pendingSel && (now - pendingSelMs) <= kDoublePressWindowMs) {
+                pendingSel = false;
+                rockerLocked = !rockerLocked;
+                uiChanged = true;
+            } else {
+                pendingSel = true;
+                pendingSelMs = now;
+            }
+        }
+
+        if (pendingSel && (millis() - pendingSelMs) > kDoublePressWindowMs) {
+            pendingSel = false;
+            trackMode = !trackMode;
+            uiChanged = true;
+        }
+
+        if (check(EscPress)) {
+            hid->releaseAll();
+            displayTextLine("Sleeping...");
+            einkRequestFullRefresh();
+            einkFlushIfDirty(0);
+            if (!sleepAndWakeOnG5()) { break; }
+            pendingSel = false;
+            drainInputQueue();
+            ignoreInputUntilMs = millis() + kWakeSettleMs;
+            drawStaticUI();
+            drawStatus(true);
+            continue;
+        }
+
+        if (check(NextPress)) {
+            if (!rockerLocked) {
+                if (trackMode) (void)tapMedia(KEY_MEDIA_NEXT_TRACK);
+                else (void)tapMedia(KEY_MEDIA_VOLUME_UP);
+            }
+        }
+
+        if (check(PrevPress)) {
+            if (!rockerLocked) {
+                if (trackMode) (void)tapMedia(KEY_MEDIA_PREVIOUS_TRACK);
+                else (void)tapMedia(KEY_MEDIA_VOLUME_DOWN);
+            }
+        }
+
+        if (uiChanged) drawStatus();
+
+        delay(10);
+    }
+
+    hid->releaseAll();
+    check(SelPress);
+    check(EscPress);
+    check(AuxPress);
+    returnToMenu = true;
+#endif
 }
 
 DuckyCommand *findDuckyCommand(const char *cmd) {

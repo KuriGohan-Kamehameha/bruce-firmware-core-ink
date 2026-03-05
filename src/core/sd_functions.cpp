@@ -672,6 +672,20 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
             LongPress = false;
 
             if (check(SelPress)) {
+                // In picker mode, short-select should navigate/select directly.
+                if (filePicker) {
+                    if (fileList[index].folder == true && fileList[index].operation == false) {
+                        Folder = Folder + (Folder == "/" ? "" : "/") + fileList[index].filename;
+                        Serial.println(Folder);
+                        redraw = true;
+                        continue;
+                    } else if (fileList[index].folder == false && fileList[index].operation == false) {
+                        goto Files;
+                    } else {
+                        goto BACK_FOLDER;
+                    }
+                }
+
                 if (fileList[index].folder == true && fileList[index].operation == false) {
                     options = {
                         {"New Folder", [=]() { createFolder(fs, Folder); }                                 },

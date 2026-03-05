@@ -9,6 +9,18 @@
 #include "core/led_control.h"
 #endif
 
+namespace {
+String einkRefreshDrawsMenuLabel() {
+    if (bruceConfig.einkRefreshDraws <= 0) return "Off";
+    return String(bruceConfig.einkRefreshDraws) + " draws";
+}
+
+String autoPowerOffMenuLabel() {
+    if (bruceConfig.autoPowerOffMinutes <= 0) return "Never";
+    return String(bruceConfig.autoPowerOffMinutes) + " min";
+}
+} // namespace
+
 /*********************************************************************
 **  Function: optionsMenu
 **  Main Config menu entry point
@@ -62,7 +74,9 @@ void ConfigMenu::displayUIMenu() {
     while (true) {
         std::vector<Option> localOptions = {
 #if defined(HAS_EINK)
-            {"Refresh",     [this]() { setEinkRefreshMenu(); }              },
+            {"Full Refresh (Time)", [this]() { setEinkRefreshMenu(); }                              },
+            {String("Full Refresh (Draws): ") + einkRefreshDrawsMenuLabel(),
+             [this]() { setEinkRefreshDrawsMenu(); }},
 #else
             {"Brightness", [this]() { setBrightnessMenu(); }},
 #endif
@@ -239,6 +253,9 @@ void ConfigMenu::advancedMenu() {
 void ConfigMenu::powerMenu() {
     while (true) {
         std::vector<Option> localOptions = {
+#if defined(HAS_CONTROLLED_POWEROFF)
+            {String("Auto PowerOff: ") + autoPowerOffMenuLabel(), [this]() { setAutoPowerOffMenu(); }},
+#endif
             {"Deep Sleep", goToDeepSleep          },
 #if !defined(HAS_EINK)
             {"Sleep",      setSleepMode           },
