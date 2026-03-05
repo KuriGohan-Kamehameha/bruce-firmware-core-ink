@@ -1,16 +1,17 @@
+import glob
+import gzip
 import hashlib
+import re
+import shlex
+from os import makedirs, remove, rename
+from os.path import basename, dirname, exists, isfile, join
 from typing import TYPE_CHECKING, Any
+
 import requests
 
 if TYPE_CHECKING:
     Import: Any = None
     env: Any = {}
-
-import glob
-import gzip
-import re
-from os import makedirs, remove, rename
-from os.path import basename, dirname, exists, isfile, join
 
 Import("env")  # type: ignore
 
@@ -18,6 +19,14 @@ FRAMEWORK_DIR = env.PioPlatform().get_package_dir("framework-arduinoespressif32-
 board_mcu = env.BoardConfig()
 mcu = board_mcu.get("build.mcu", "")
 patchflag_path = join(FRAMEWORK_DIR,mcu, "lib", ".patched")
+
+
+def run_platformio_pkg_exec(tool_package, tool_command):
+    python_exe = env.subst("$PYTHONEXE") or "python3"
+    cmd = (
+        f"{shlex.quote(python_exe)} -m platformio pkg exec -p {tool_package} -- {tool_command}"
+    )
+    return env.Execute(cmd)
 
 # patch file only if we didn't do it befored
 if not isfile(join(FRAMEWORK_DIR,mcu, "lib", ".patched")):
@@ -27,17 +36,22 @@ if not isfile(join(FRAMEWORK_DIR,mcu, "lib", ".patched")):
     )
 
     if mcu=="esp32c5" or mcu=="esp32c6" :
-        env.Execute(
-            "pio pkg exec -p toolchain-riscv32-esp -- riscv32-esp-elf-objcopy  --weaken-symbol=ieee80211_raw_frame_sanity_check %s %s"
-            % (original_file, patched_file)
+        patch_result = run_platformio_pkg_exec(
+            "toolchain-riscv32-esp",
+            "riscv32-esp-elf-objcopy --weaken-symbol=ieee80211_raw_frame_sanity_check %s %s"
+            % (shlex.quote(original_file), shlex.quote(patched_file)),
         )
     elif mcu=="esp32p4":
         """Do nothing"""
+        patch_result = 0
     else:
-        env.Execute(
-            "pio pkg exec -p toolchain-xtensa-%s -- xtensa-%s-elf-objcopy  --weaken-symbol=ieee80211_raw_frame_sanity_check %s %s"
-            % (mcu, mcu, original_file, patched_file)
+        patch_result = run_platformio_pkg_exec(
+            "toolchain-xtensa-%s" % mcu,
+            "xtensa-%s-elf-objcopy --weaken-symbol=ieee80211_raw_frame_sanity_check %s %s"
+            % (mcu, shlex.quote(original_file), shlex.quote(patched_file)),
         )
+    if patch_result != 0:
+        raise RuntimeError(f"Failed to patch {original_file} using {mcu} toolchain")
 
     if isfile("%s.old" % (original_file)):
         remove("%s.old" % (original_file))
@@ -93,28 +107,42 @@ def load_checksum_file(input_file):
         return f.readline().strip()
 
 
-def minify_css(c):
-    minify_req = requests.post(
+def minify_with_remote_api(api_url, raw_bytes):
+    if not raw_bytes:
+        return raw_bytes
+
+    try:
+        minify_req = requests.post(
+            api_url,
+            {"input": raw_bytes.decode("utf-8")},
+            timeout=8,
+        )
+        minify_req.raise_for_status()
+        return minify_req.text.encode("utf-8")
+    except Exception as ex:
+        print(f"[MINIFY] Skipping remote minify ({api_url}): {ex}")
+        return raw_bytes
+
+
+def minify_css(raw_bytes):
+    return minify_with_remote_api(
         "https://www.toptal.com/developers/cssminifier/api/raw",
-        {"input": c.read().decode('utf-8')},
+        raw_bytes,
     )
-    return c if minify_req is False else minify_req.text.encode('utf-8')
 
 
-def minify_js(js):
-    minify_req = requests.post(
-        'https://www.toptal.com/developers/javascript-minifier/api/raw',
-        {'input': js.read().decode('utf-8')},
+def minify_js(raw_bytes):
+    return minify_with_remote_api(
+        "https://www.toptal.com/developers/javascript-minifier/api/raw",
+        raw_bytes,
     )
-    return js if minify_req is False else minify_req.text.encode('utf-8')
 
 
-def minify_html(html):
-    minify_req = requests.post(
-        'https://www.toptal.com/developers/html-minifier/api/raw',
-        {'input': html.read().decode('utf-8')},
+def minify_html(raw_bytes):
+    return minify_with_remote_api(
+        "https://www.toptal.com/developers/html-minifier/api/raw",
+        raw_bytes,
     )
-    return html if minify_req is False else minify_req.text.encode('utf-8')
 
 
 # gzip web files
@@ -157,12 +185,13 @@ def prepare_www_files():
             gz_file = file + ".gz"
             with open(file, "rb") as src, gzip.open(gz_file, "wb") as dst:
                 ext = basename(file).rsplit(".", 1)[-1].lower()
+                source_bytes = src.read()
                 if ext == 'html':
-                    minified = minify_html(src)
+                    minified = minify_html(source_bytes)
                 elif ext == 'css':
-                    minified = minify_css(src)
+                    minified = minify_css(source_bytes)
                 elif ext == 'js':
-                    minified = minify_js(src)
+                    minified = minify_js(source_bytes)
                 else:
                     raise ValueError(f"Unsupported file type: {ext}")
 

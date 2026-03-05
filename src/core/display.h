@@ -125,6 +125,7 @@ void turnOffDisplay();
 bool wakeUpScreen();
 
 void displayRedStripe(String text, uint16_t fgcolor = TFT_WHITE, uint16_t bgcolor = TFT_RED);
+void drawPowerOffFrame();
 
 int8_t displayMessage(
     const char *message, const char *leftButton, const char *centerButton, const char *rightButton,
@@ -191,6 +192,8 @@ void printSubtitle(String subtitle, bool withLine = true);
 void printFootnote(String text);
 void printCenterFootnote(String text);
 void einkFlushIfDirty(uint32_t minIntervalMs = 0xFFFFFFFFu);
+void einkFlushIfDirtyPartial(uint32_t minIntervalMs = 0);
+void einkRequestFullRefresh();
 
 Opt_Coord listFiles(int index, std::vector<FileList> fileList);
 

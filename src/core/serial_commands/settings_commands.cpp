@@ -36,7 +36,9 @@ uint32_t settingsCallback(cmd *c) {
     if (setting_name == "priColor") bruceConfig.setUiColor(setting_value.toInt());
     if (setting_name == "rot") bruceConfigPins.setRotation(setting_value.toInt());
     if (setting_name == "dimmerSet") bruceConfig.setDimmer(setting_value.toInt());
+    if (setting_name == "autoPowerOffMinutes") bruceConfig.setAutoPowerOffMinutes(setting_value.toInt());
     if (setting_name == "bright") bruceConfig.setBright(setting_value.toInt());
+    if (setting_name == "einkRefreshDraws") bruceConfig.setEinkRefreshDraws(setting_value.toInt());
     if (setting_name == "tmz") bruceConfig.setTmz(setting_value.toFloat());
     if (setting_name == "soundEnabled") bruceConfig.setSoundEnabled(setting_value.toInt());
     if (setting_name == "wifiAtStartup") bruceConfig.setWifiAtStartup(setting_value.toInt());
