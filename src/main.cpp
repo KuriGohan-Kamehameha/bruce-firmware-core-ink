@@ -41,6 +41,7 @@ volatile bool DownPress = false;
 volatile bool SelPress = false;
 volatile bool EscPress = false;
 volatile bool AnyKeyPress = false;
+volatile bool AuxPress = false;
 volatile bool NextPagePress = false;
 volatile bool PrevPagePress = false;
 volatile bool LongPress = false;
@@ -73,6 +74,7 @@ void __attribute__((weak)) taskInputHandler(void *parameter) {
             SelPress = false;
             EscPress = false;
             AnyKeyPress = false;
+            AuxPress = false;
             SerialCmdPress = false;
             NextPagePress = false;
             PrevPagePress = false;
@@ -569,9 +571,6 @@ void loop() {
     }
 #endif
     tft.fillScreen(bruceConfig.bgColor);
-#if defined(HAS_EINK)
-    einkFlushIfDirty(0);
-#endif
 
     mainMenu.begin();
     delay(1);

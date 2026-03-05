@@ -12,6 +12,9 @@ public:
     void drawIcon(float scale);
     bool hasTheme() { return bruceConfig.theme.clock; }
     String themePath() { return bruceConfig.theme.paths.clock; }
+
+private:
+    bool analogClock = true;
 };
 
 #endif

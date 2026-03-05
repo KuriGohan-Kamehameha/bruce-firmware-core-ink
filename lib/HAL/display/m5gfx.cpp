@@ -63,11 +63,17 @@ void tft_display::init(uint8_t tc) {
     M5.Display.setEpdMode(lgfx::epd_mode_t::epd_quality);
 #endif
 }
-void tft_display::display() {
+void tft_display::display(bool forceFull) {
 #if defined(HAS_EINK)
-    // Always flush full frame on e-ink to prevent persistent speckled artifacts.
-    M5.Display.display(0, 0, M5.Display.width(), M5.Display.height());
+    if (forceFull) {
+        M5.Display.setEpdMode(lgfx::epd_mode_t::epd_quality);
+        M5.Display.display(0, 0, M5.Display.width(), M5.Display.height());
+    } else {
+        M5.Display.setEpdMode(lgfx::epd_mode_t::epd_fast);
+        M5.Display.display();
+    }
 #else
+    (void)forceFull;
     M5.Display.display();
 #endif
 }

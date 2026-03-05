@@ -158,9 +158,17 @@ void showDeviceInfo() {
     area.addLine("Width: " + String(tftWidth) + "px");
     area.addLine("Height: " + String(tftHeight) + "px");
 #if defined(HAS_EINK)
-    area.addLine("Refresh: " + String(bruceConfig.einkRefreshMs) + "ms");
+    area.addLine("Full Refresh: " + String(bruceConfig.einkRefreshMs) + "ms");
+    if (bruceConfig.einkRefreshDraws > 0)
+        area.addLine("Full Refresh Draws: " + String(bruceConfig.einkRefreshDraws));
+    else area.addLine("Full Refresh Draws: Off");
 #else
     area.addLine("Brightness: " + String(bruceConfig.bright) + "%");
+#endif
+#if defined(HAS_CONTROLLED_POWEROFF)
+    if (bruceConfig.autoPowerOffMinutes > 0)
+        area.addLine("Auto PowerOff: " + String(bruceConfig.autoPowerOffMinutes) + " min");
+    else area.addLine("Auto PowerOff: Never");
 #endif
     area.addLine("");
 #endif
@@ -170,6 +178,9 @@ void showDeviceInfo() {
     area.addLine("GROVE_SCL: " + String(bruceConfigPins.i2c_bus.scl));
     area.addLine("SERIAL TX: " + String(bruceConfigPins.uart_bus.tx));
     area.addLine("SERIAL RX: " + String(bruceConfigPins.uart_bus.rx));
+#if defined(BUZZ_PIN)
+    area.addLine("BUZZER: " + String(BUZZ_PIN));
+#endif
     area.addLine("SPI_SCK_PIN: " + String(SPI_SCK_PIN));
     area.addLine("SPI_MOSI_PIN: " + String(SPI_MOSI_PIN));
     area.addLine("SPI_MISO_PIN: " + String(SPI_MISO_PIN));

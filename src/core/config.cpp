@@ -13,8 +13,10 @@ JsonDocument BruceConfig::toJson() const {
     setting["themeOnSd"] = theme.fs;
 
     setting["dimmerSet"] = dimmerSet;
+    setting["autoPowerOffMinutes"] = autoPowerOffMinutes;
     setting["bright"] = bright;
     setting["einkRefreshMs"] = einkRefreshMs;
+    setting["einkRefreshDraws"] = einkRefreshDraws;
     setting["automaticTimeUpdateViaNTP"] = automaticTimeUpdateViaNTP;
     setting["tmz"] = tmz;
     setting["dst"] = dst;
@@ -156,6 +158,12 @@ void BruceConfig::fromFile(bool checkFS) {
         count++;
         log_e("Fail");
     }
+    if (!setting["autoPowerOffMinutes"].isNull()) {
+        autoPowerOffMinutes = setting["autoPowerOffMinutes"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
     if (!setting["bright"].isNull()) {
         bright = setting["bright"].as<int>();
     } else {
@@ -164,6 +172,12 @@ void BruceConfig::fromFile(bool checkFS) {
     }
     if (!setting["einkRefreshMs"].isNull()) {
         einkRefreshMs = setting["einkRefreshMs"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["einkRefreshDraws"].isNull()) {
+        einkRefreshDraws = setting["einkRefreshDraws"].as<int>();
     } else {
         count++;
         log_e("Fail");
@@ -457,8 +471,10 @@ void BruceConfig::factoryReset() {
 
 void BruceConfig::validateConfig() {
     validateDimmerValue();
+    validateAutoPowerOffMinutes();
     validateBrightValue();
     validateEinkRefreshMs();
+    validateEinkRefreshDraws();
     validateTmzValue();
     validateSoundEnabledValue();
     validateSoundVolumeValue();
@@ -503,6 +519,21 @@ void BruceConfig::validateDimmerValue() {
     if (dimmerSet > 60) dimmerSet = 0;
 }
 
+void BruceConfig::setAutoPowerOffMinutes(int value) {
+    autoPowerOffMinutes = value;
+    validateAutoPowerOffMinutes();
+    saveFile();
+}
+
+void BruceConfig::validateAutoPowerOffMinutes() {
+    if (autoPowerOffMinutes == 0 || autoPowerOffMinutes == 5 || autoPowerOffMinutes == 10 ||
+        autoPowerOffMinutes == 30 || autoPowerOffMinutes == 60 || autoPowerOffMinutes == 120 ||
+        autoPowerOffMinutes == 240) {
+        return;
+    }
+    autoPowerOffMinutes = 0;
+}
+
 void BruceConfig::setBright(uint8_t value) {
     bright = value;
     validateBrightValue();
@@ -522,6 +553,17 @@ void BruceConfig::setEinkRefreshMs(int value) {
 void BruceConfig::validateEinkRefreshMs() {
     if (einkRefreshMs < 0) einkRefreshMs = 0;
     if (einkRefreshMs > 600000) einkRefreshMs = 600000;
+}
+
+void BruceConfig::setEinkRefreshDraws(int value) {
+    einkRefreshDraws = value;
+    validateEinkRefreshDraws();
+    saveFile();
+}
+
+void BruceConfig::validateEinkRefreshDraws() {
+    if (einkRefreshDraws < 0) einkRefreshDraws = 0;
+    if (einkRefreshDraws > 100) einkRefreshDraws = 100;
 }
 
 void BruceConfig::setAutomaticTimeUpdateViaNTP(bool value) {

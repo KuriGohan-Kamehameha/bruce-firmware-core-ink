@@ -1,4 +1,8 @@
 #include "core/powerSave.h"
+#include "core/display.h"
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+#include "modules/others/audio.h"
+#endif
 #include <M5Unified.h>
 #include <globals.h>
 #include <interface.h>
@@ -10,24 +14,110 @@ constexpr uint8_t ROCKER_RIGHT_PIN = 37;
 constexpr bool ROCKER_ACTIVE_LOW = true;
 constexpr uint8_t INPUT_LED_ON = 255;
 constexpr uint8_t INPUT_LED_OFF = 0;
+constexpr uint8_t CHARGING_LED_ON = 48;
 constexpr uint32_t INPUT_LED_PULSE_MS = 35;
+constexpr uint32_t POWER_EVENT_LED_PULSE_MS = 180;
+constexpr uint32_t POWER_STATE_POLL_MS = 250;
+constexpr uint16_t POWER_CONNECTED_TONE_HZ = 3200;
+constexpr uint16_t POWER_DISCONNECTED_TONE_HZ = 2200;
+constexpr uint16_t POWER_EVENT_TONE_MS = 100;
+
 uint32_t g_inputLedPulseUntilMs = 0;
+uint32_t g_lastPowerSampleMs = 0;
+uint8_t g_ledIdleBrightness = INPUT_LED_OFF;
+bool g_powerStateInitialized = false;
+bool g_lastExternalPowerPresent = false;
+bool g_lastChargingState = false;
 
 bool readRockerPin(uint8_t pin) {
     int level = digitalRead(pin);
     return ROCKER_ACTIVE_LOW ? (level == LOW) : (level == HIGH);
 }
 
+void applyIdleLedState() {
+    if (g_inputLedPulseUntilMs == 0U) { M5.Power.setLed(g_ledIdleBrightness); }
+}
+
+void setIdleLedForCharging(bool charging) {
+    g_ledIdleBrightness = charging ? CHARGING_LED_ON : INPUT_LED_OFF;
+    applyIdleLedState();
+}
+
+void triggerLedPulse(uint32_t pulseMs, uint8_t brightness) {
+    M5.Power.setLed(brightness);
+    g_inputLedPulseUntilMs = millis() + pulseMs;
+}
+
 void serviceInputLedPulse() {
-    if (g_inputLedPulseUntilMs != 0 && millis() >= g_inputLedPulseUntilMs) {
-        M5.Power.setLed(INPUT_LED_OFF);
+    if (g_inputLedPulseUntilMs != 0U && millis() >= g_inputLedPulseUntilMs) {
         g_inputLedPulseUntilMs = 0;
+        applyIdleLedState();
     }
 }
 
 void triggerInputLedPulse() {
-    M5.Power.setLed(INPUT_LED_ON);
-    g_inputLedPulseUntilMs = millis() + INPUT_LED_PULSE_MS;
+    triggerLedPulse(INPUT_LED_PULSE_MS, INPUT_LED_ON);
+}
+
+bool isExternalPowerPresent() {
+    if (M5.Power.getType() == m5::Power_Class::pmic_t::pmic_axp192) {
+        return M5.Power.Axp192.isACIN() || M5.Power.Axp192.isVBUS();
+    }
+    int16_t vbusMv = M5.Power.getVBUSVoltage();
+    if (vbusMv < 0) {
+        return false;
+    }
+    return vbusMv > 4300;
+}
+
+bool readChargingState() {
+    return M5.Power.isCharging() == m5::Power_Class::is_charging_t::is_charging;
+}
+
+void playPowerTransitionTone(bool powerConnected) {
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+    if (!bruceConfig.soundEnabled) {
+        return;
+    }
+
+    if (powerConnected) {
+        _tone(POWER_CONNECTED_TONE_HZ, POWER_EVENT_TONE_MS);
+    } else {
+        _tone(POWER_DISCONNECTED_TONE_HZ, POWER_EVENT_TONE_MS);
+    }
+#else
+    (void)powerConnected;
+#endif
+}
+
+void servicePowerIndicators() {
+    const uint32_t nowMs = millis();
+    if ((nowMs - g_lastPowerSampleMs) < POWER_STATE_POLL_MS) {
+        return;
+    }
+    g_lastPowerSampleMs = nowMs;
+
+    const bool powerPresent = isExternalPowerPresent();
+    const bool charging = readChargingState();
+
+    if (!g_powerStateInitialized) {
+        g_lastExternalPowerPresent = powerPresent;
+        g_lastChargingState = charging;
+        g_powerStateInitialized = true;
+        setIdleLedForCharging(charging);
+        return;
+    }
+
+    if (charging != g_lastChargingState) {
+        setIdleLedForCharging(charging);
+        g_lastChargingState = charging;
+    }
+
+    if (powerPresent != g_lastExternalPowerPresent) {
+        g_lastExternalPowerPresent = powerPresent;
+        triggerLedPulse(POWER_EVENT_LED_PULSE_MS, INPUT_LED_ON);
+        playPowerTransitionTone(powerPresent);
+    }
 }
 } // namespace
 
@@ -41,7 +131,14 @@ void _setup_gpio() {
     pinMode(ROCKER_LEFT_PIN, INPUT_PULLUP);
     pinMode(ROCKER_CENTER_PIN, INPUT_PULLUP);
     pinMode(ROCKER_RIGHT_PIN, INPUT_PULLUP);
-    M5.Power.setLed(INPUT_LED_OFF);
+#if defined(BUZZ_PIN)
+    pinMode(BUZZ_PIN, OUTPUT);
+    digitalWrite(BUZZ_PIN, LOW);
+#endif
+    g_lastExternalPowerPresent = isExternalPowerPresent();
+    g_lastChargingState = readChargingState();
+    g_powerStateInitialized = true;
+    setIdleLedForCharging(g_lastChargingState);
 }
 
 /***************************************************************************************
@@ -67,12 +164,13 @@ void _setBrightness(uint8_t brightval) { (void)brightval; }
 **********************************************************************/
 void InputHandler(void) {
     static unsigned long tm = 0;
-    if (millis() - tm < 200 && !LongPress) return;
 
     M5.update();
     serviceInputLedPulse();
+    servicePowerIndicators();
+    if (millis() - tm < 200 && !LongPress) return;
 
-    // Rocker button: left/right = next/prev (inverted for intuitive nav), center = select/back
+    // Rocker button: left/right = next/prev, center = select/back (hold), G5 = back
     static bool lastLeft = false;
     static bool lastRight = false;
     static bool lastCenter = false;
@@ -85,6 +183,7 @@ void InputHandler(void) {
     bool leftPressed = leftNow && !lastLeft;
     bool rightPressed = rightNow && !lastRight;
     bool centerPressed = centerNow && !lastCenter;
+    bool auxPressed = M5.BtnEXT.wasPressed(); // G5 top button
 
     // Track center button hold time for long press detection
     if (centerNow && !lastCenter) { centerPressTime = millis(); }
@@ -99,20 +198,21 @@ void InputHandler(void) {
         rightPressed = false;
     }
 
-    bool any = leftPressed || rightPressed || centerPressed;
+    bool any = leftPressed || rightPressed || centerPressed || auxPressed;
     if (any) tm = millis();
     if (any && wakeUpScreen()) return;
 
     if (any) { triggerInputLedPulse(); }
 
     AnyKeyPress = any;
+    AuxPress = auxPressed;
     UpPress = false;
     DownPress = false;
     const bool invertRocker = bruceConfig.rockerInverted;
     SelPress = centerPressed && !centerLongPress;           // Select on short press
     NextPress = invertRocker ? rightPressed : leftPressed;  // Next item
     PrevPress = invertRocker ? leftPressed : rightPressed;  // Previous item
-    EscPress = centerLongPress;                   // Back on long press (800ms+)
+    EscPress = centerLongPress || auxPressed;     // Back on center hold or G5 press
     LongPress = false;
 }
 
@@ -121,7 +221,11 @@ void InputHandler(void) {
 ** location: mykeyboard.cpp
 ** Turns off the device (or try to)
 **********************************************************************/
-void powerOff() { M5.Power.powerOff(); }
+void powerOff() {
+    drawPowerOffFrame();
+    delay(120);
+    M5.Power.powerOff();
+}
 void goToDeepSleep() { M5.Power.deepSleep(); }
 
 /*********************************************************************
@@ -136,6 +240,5 @@ void checkReboot() {}
 ** Description:   Determines if the device is charging
 ***************************************************************************************/
 bool isCharging() {
-    if (M5.Power.getBatteryCurrent() > 0 || M5.Power.getBatteryCurrent()) return true;
-    else return false;
+    return readChargingState();
 }

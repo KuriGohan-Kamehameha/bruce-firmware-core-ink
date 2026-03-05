@@ -16,8 +16,38 @@
 #include "utils.h"
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <globals.h>
+#include <math.h>
 
 int currentScreenBrightness = -1;
+
+namespace {
+std::vector<std::pair<const char *, int>> buildSelectablePins() {
+    std::vector<std::pair<const char *, int>> pins = GPIO_PIN_LIST;
+    pins.insert(pins.begin(), {"NC", -1});
+    return pins;
+}
+
+int findPinIndex(const std::vector<std::pair<const char *, int>> &pins, gpio_num_t pinValue) {
+    for (size_t i = 0; i < pins.size(); ++i) {
+        if (pins[i].second == static_cast<int>(pinValue)) {
+            return static_cast<int>(i);
+        }
+    }
+    return 0;
+}
+
+gpio_num_t selectPinFromMenu(const std::vector<std::pair<const char *, int>> &pins, gpio_num_t currentPin) {
+    gpio_num_t selected = currentPin;
+    options.clear();
+    for (const auto &pin : pins) {
+        options.push_back({pin.first, [&selected, pin]() { selected = static_cast<gpio_num_t>(pin.second); }});
+    }
+
+    loopOptions(options, findPinIndex(pins, currentPin));
+    options.clear();
+    return selected;
+}
+} // namespace
 
 // This function comes from interface.h
 void _setBrightness(uint8_t brightval) {}
@@ -173,6 +203,52 @@ void setEinkRefreshMenu() {
     loopOptions(options, MENU_TYPE_REGULAR, "", idx);
 }
 
+void setEinkRefreshDrawsMenu() {
+    int idx = 4;
+    if (bruceConfig.einkRefreshDraws <= 0) idx = 0;
+    else if (bruceConfig.einkRefreshDraws == 1) idx = 1;
+    else if (bruceConfig.einkRefreshDraws == 3) idx = 2;
+    else if (bruceConfig.einkRefreshDraws == 5) idx = 3;
+    else if (bruceConfig.einkRefreshDraws == 10) idx = 4;
+    else if (bruceConfig.einkRefreshDraws == 20) idx = 5;
+    else if (bruceConfig.einkRefreshDraws == 40) idx = 6;
+    else idx = 4;
+
+    options = {
+        {"Off",      [=]() { bruceConfig.setEinkRefreshDraws(0); } },
+        {"1 draw",   [=]() { bruceConfig.setEinkRefreshDraws(1); } },
+        {"3 draws",  [=]() { bruceConfig.setEinkRefreshDraws(3); } },
+        {"5 draws",  [=]() { bruceConfig.setEinkRefreshDraws(5); } },
+        {"10 draws", [=]() { bruceConfig.setEinkRefreshDraws(10); }},
+        {"20 draws", [=]() { bruceConfig.setEinkRefreshDraws(20); }},
+        {"40 draws", [=]() { bruceConfig.setEinkRefreshDraws(40); }},
+    };
+    addOptionToMainMenu();
+    loopOptions(options, MENU_TYPE_REGULAR, "Full Refresh Every", idx);
+}
+
+void setAutoPowerOffMenu() {
+    int idx = 6;
+    if (bruceConfig.autoPowerOffMinutes == 5) idx = 0;
+    else if (bruceConfig.autoPowerOffMinutes == 10) idx = 1;
+    else if (bruceConfig.autoPowerOffMinutes == 30) idx = 2;
+    else if (bruceConfig.autoPowerOffMinutes == 60) idx = 3;
+    else if (bruceConfig.autoPowerOffMinutes == 120) idx = 4;
+    else if (bruceConfig.autoPowerOffMinutes == 240) idx = 5;
+
+    options = {
+        {"5 min",   [=]() { bruceConfig.setAutoPowerOffMinutes(5); }  },
+        {"10 min",  [=]() { bruceConfig.setAutoPowerOffMinutes(10); } },
+        {"30 min",  [=]() { bruceConfig.setAutoPowerOffMinutes(30); } },
+        {"60 min",  [=]() { bruceConfig.setAutoPowerOffMinutes(60); } },
+        {"120 min", [=]() { bruceConfig.setAutoPowerOffMinutes(120); }},
+        {"240 min", [=]() { bruceConfig.setAutoPowerOffMinutes(240); }},
+        {"Never",   [=]() { bruceConfig.setAutoPowerOffMinutes(0); }  },
+    };
+    addOptionToMainMenu();
+    loopOptions(options, MENU_TYPE_REGULAR, "Auto PowerOff", idx);
+}
+
 /*********************************************************************
 **  Function: setSleepMode
 **  Turn screen off and reduces cpu clock
@@ -202,6 +278,7 @@ void setBWInvertMenu() {
              tft.invertDisplay(bruceConfig.colorInverted);
 #else
              // Force a full repaint after polarity changes to avoid stale dots/ghosting.
+             einkRequestFullRefresh();
              tft.fillScreen(bruceConfig.bgColor);
 #endif
              einkFlushIfDirty(0);
@@ -213,6 +290,7 @@ void setBWInvertMenu() {
              tft.invertDisplay(bruceConfig.colorInverted);
 #else
              // Force a full repaint after polarity changes to avoid stale dots/ghosting.
+             einkRequestFullRefresh();
              tft.fillScreen(bruceConfig.bgColor);
 #endif
              einkFlushIfDirty(0);
@@ -969,10 +1047,55 @@ void setClock() {
     }
 }
 
+static void drawAnalogClockHand(int centerX, int centerY, float angleDeg, int length, int thickness, uint16_t color) {
+    const float radians = (angleDeg - 90.0f) * (PI / 180.0f);
+    const float dirX = cosf(radians);
+    const float dirY = sinf(radians);
+    const float normalX = -dirY;
+    const float normalY = dirX;
+    const int endX = centerX + lroundf(dirX * length);
+    const int endY = centerY + lroundf(dirY * length);
+    const int halfThickness = thickness / 2;
+
+    for (int offset = -halfThickness; offset <= halfThickness; ++offset) {
+        const int offsetX = lroundf(normalX * offset);
+        const int offsetY = lroundf(normalY * offset);
+        tft.drawLine(centerX + offsetX, centerY + offsetY, endX + offsetX, endY + offsetY, color);
+    }
+}
+
+static void drawAnalogClockFace(int centerX, int centerY, int markerInnerRadius, int markerOuterRadius) {
+    tft.drawCircle(centerX, centerY, markerOuterRadius + 1, bruceConfig.priColor);
+    for (int marker = 0; marker < 12; marker++) {
+        const float radians = (marker * 30.0f - 90.0f) * (PI / 180.0f);
+        const int x1 = centerX + lroundf(cosf(radians) * markerInnerRadius);
+        const int y1 = centerY + lroundf(sinf(radians) * markerInnerRadius);
+        const int x2 = centerX + lroundf(cosf(radians) * markerOuterRadius);
+        const int y2 = centerY + lroundf(sinf(radians) * markerOuterRadius);
+        tft.drawLine(x1, y1, x2, y2, bruceConfig.priColor);
+    }
+}
+
 void runClockLoop(bool showMenuHint) {
-    int tmp = 0;
+    unsigned long lastTickMs = 0;
     unsigned long hintStartTime = millis();
     bool hintVisible = showMenuHint;
+    bool hintDrawn = false;
+    bool frameDrawn = false;
+    String lastRenderedTime = "";
+
+    const int frameX = BORDER_PAD_X;
+    const int frameY = BORDER_PAD_X;
+    const int frameW = tftWidth - 2 * BORDER_PAD_X;
+    const int frameH = tftHeight - 2 * BORDER_PAD_X;
+    const int timeBoxX = BORDER_PAD_X + 1;
+    const int timeBoxY = (tftHeight / 2) - 16;
+    const int timeBoxW = tftWidth - 2 * BORDER_PAD_X - 2;
+    const int timeBoxH = (4 * LH) + 6;
+    const int hintBoxX = BORDER_PAD_X + 1;
+    const int hintBoxY = tftHeight / 2 + 20;
+    const int hintBoxW = tftWidth - 2 * BORDER_PAD_X - 2;
+    const int hintBoxH = 20;
 
 #if defined(HAS_RTC)
 #if defined(HAS_RTC_BM8563)
@@ -989,22 +1112,24 @@ void runClockLoop(bool showMenuHint) {
     delay(300);
 
     for (;;) {
-        if (millis() - tmp > 1000) {
+        if (millis() - lastTickMs > 1000) {
 #if defined(HAS_RTC)
             updateTimeStr(_rtc.getTimeStruct());
 #else
             updateTimeStr(rtc.getTimeStruct());
 #endif
-            Serial.print("Current time: ");
-            Serial.println(timeStr);
+
+            bool redraw = false;
+            String currentTime = String(timeStr);
+
             tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-            tft.drawRect(
-                BORDER_PAD_X,
-                BORDER_PAD_X,
-                tftWidth - 2 * BORDER_PAD_X,
-                tftHeight - 2 * BORDER_PAD_X,
-                bruceConfig.priColor
-            );
+
+            if (!frameDrawn) {
+                tft.drawRect(frameX, frameY, frameW, frameH, bruceConfig.priColor);
+                frameDrawn = true;
+                redraw = true;
+            }
+
             uint8_t f_size = 4;
             for (uint8_t i = 4; i > 0; i--) {
                 if (i * LW * strlen(timeStr) < (tftWidth - BORDER_PAD_X * 2)) {
@@ -1012,27 +1137,34 @@ void runClockLoop(bool showMenuHint) {
                     break;
                 }
             }
-            tft.setTextSize(f_size);
-            tft.drawCentreString(timeStr, tftWidth / 2, tftHeight / 2 - 13, 1);
+
+            if (currentTime != lastRenderedTime) {
+                tft.fillRect(timeBoxX, timeBoxY, timeBoxW, timeBoxH, bruceConfig.bgColor);
+                tft.setTextSize(f_size);
+                tft.drawCentreString(timeStr, tftWidth / 2, tftHeight / 2 - 13, 1);
+                lastRenderedTime = currentTime;
+                redraw = true;
+            }
 
             // "OK to show menu" hint management
             if (hintVisible && (millis() - hintStartTime < 5000)) {
-                tft.setTextSize(1);
-                tft.drawCentreString("OK to show menu", tftWidth / 2, tftHeight / 2 + 25, 1);
+                if (!hintDrawn) {
+                    tft.setTextSize(1);
+                    tft.fillRect(hintBoxX, hintBoxY, hintBoxW, hintBoxH, bruceConfig.bgColor);
+                    tft.drawCentreString("OK to show menu", tftWidth / 2, tftHeight / 2 + 25, 1);
+                    hintDrawn = true;
+                    redraw = true;
+                }
             } else if (hintVisible && (millis() - hintStartTime >= 5000)) {
                 // Clear hint after 5 seconds
-                tft.fillRect(
-                    BORDER_PAD_X + 1,
-                    tftHeight / 2 + 20,
-                    tftWidth - 2 * BORDER_PAD_X - 2,
-                    20,
-                    bruceConfig.bgColor
-                );
+                tft.fillRect(hintBoxX, hintBoxY, hintBoxW, hintBoxH, bruceConfig.bgColor);
                 hintVisible = false;
+                hintDrawn = false;
+                redraw = true;
             }
-            tmp = millis();
+            lastTickMs = millis();
 #if defined(HAS_EINK)
-            einkFlushIfDirty();
+            if (redraw) einkFlushIfDirtyPartial(0);
 #endif
         }
 
@@ -1044,6 +1176,110 @@ void runClockLoop(bool showMenuHint) {
                 break;
             } else {
                 // Original behavior
+                returnToMenu = true;
+                break;
+            }
+        }
+
+        if (check(EscPress)) {
+            tft.fillScreen(bruceConfig.bgColor);
+            returnToMenu = true;
+            break;
+        }
+
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+void runAnalogClockLoop(bool showMenuHint) {
+    unsigned long lastTickMs = 0;
+
+    const int centerX = tftWidth / 2;
+    const int centerY = tftHeight / 2;
+    const int minDimension = (tftWidth < tftHeight) ? tftWidth : tftHeight;
+    const int markerOuterRadius = (minDimension / 2) - 4;
+    const int markerInnerRadius = markerOuterRadius - 9;
+    const int minuteHandLength = markerInnerRadius - 4;
+    const int hourHandLength = (minuteHandLength * 6) / 10;
+    const int minuteHandThickness = 3;
+    const int hourHandThickness = 5;
+    const int centerDotRadius = 3;
+
+    int lastHour = -1;
+    int lastMinute = -1;
+    float lastHourAngle = 0.0f;
+    float lastMinuteAngle = 0.0f;
+    bool handsDrawn = false;
+
+    tft.fillScreen(bruceConfig.bgColor);
+    drawAnalogClockFace(centerX, centerY, markerInnerRadius, markerOuterRadius);
+
+    for (;;) {
+        if (millis() - lastTickMs > 1000) {
+            struct tm timeInfo;
+#if defined(HAS_RTC)
+            timeInfo = _rtc.getTimeStruct();
+#else
+            timeInfo = rtc.getTimeStruct();
+#endif
+
+            bool redraw = false;
+            if (!handsDrawn || timeInfo.tm_hour != lastHour || timeInfo.tm_min != lastMinute) {
+                if (handsDrawn) {
+                    drawAnalogClockHand(
+                        centerX,
+                        centerY,
+                        lastMinuteAngle,
+                        minuteHandLength,
+                        minuteHandThickness,
+                        bruceConfig.bgColor
+                    );
+                    drawAnalogClockHand(
+                        centerX,
+                        centerY,
+                        lastHourAngle,
+                        hourHandLength,
+                        hourHandThickness,
+                        bruceConfig.bgColor
+                    );
+                }
+
+                // Repaint markers after erasing old hands so the face remains crisp over time.
+                drawAnalogClockFace(centerX, centerY, markerInnerRadius, markerOuterRadius);
+
+                const float minuteAngle = timeInfo.tm_min * 6.0f;
+                const float hourAngle = ((timeInfo.tm_hour % 12) * 30.0f) + (timeInfo.tm_min * 0.5f);
+
+                drawAnalogClockHand(
+                    centerX,
+                    centerY,
+                    minuteAngle,
+                    minuteHandLength,
+                    minuteHandThickness,
+                    bruceConfig.priColor
+                );
+                drawAnalogClockHand(centerX, centerY, hourAngle, hourHandLength, hourHandThickness, bruceConfig.priColor);
+                tft.fillCircle(centerX, centerY, centerDotRadius, bruceConfig.priColor);
+
+                lastHour = timeInfo.tm_hour;
+                lastMinute = timeInfo.tm_min;
+                lastHourAngle = hourAngle;
+                lastMinuteAngle = minuteAngle;
+                handsDrawn = true;
+                redraw = true;
+            }
+
+#if defined(HAS_EINK)
+            if (redraw) einkFlushIfDirtyPartial(0);
+#endif
+            lastTickMs = millis();
+        }
+
+        if (check(SelPress)) {
+            tft.fillScreen(bruceConfig.bgColor);
+            if (showMenuHint) {
+                break;
+            } else {
                 returnToMenu = true;
                 break;
             }
@@ -1410,10 +1646,10 @@ void setBadUSBBLEKeyboardLayoutMenu() {
 void setBadUSBBLEKeyDelayMenu() {
     String delayStr = num_keyboard(String(bruceConfig.badUSBBLEKeyDelay), 3, "Key Delay (ms):");
     if (delayStr != "\x1B") {
-        uint16_t delayVal = static_cast<uint16_t>(delayStr.toInt());
+        int delayVal = delayStr.toInt();
         if (delayVal >= 0 && delayVal <= 500) {
-            bruceConfig.setBadUSBBLEKeyDelay(delayVal);
-        } else if (delayVal != 0) {
+            bruceConfig.setBadUSBBLEKeyDelay(static_cast<uint16_t>(delayVal));
+        } else {
             displayError("Invalid key delay value (0 to 500)", true);
         }
     }
@@ -1508,27 +1744,13 @@ RELOAD:
             bruceConfigPins.setSpiPins(value);
         }
     } else {
-        options = {};
-        gpio_num_t sel = GPIO_NUM_NC;
-        int index = 0;
-        if (opt == 1) index = points.sck + 1;
-        else if (opt == 2) index = points.miso + 1;
-        else if (opt == 3) index = points.mosi + 1;
-        else if (opt == 4) index = points.cs + 1;
-        else if (opt == 5) index = points.io0 + 1;
-        else if (opt == 6) index = points.io2 + 1;
-        for (int8_t i = -1; i <= GPIO_NUM_MAX; i++) {
-            String tmp = String(i);
-            options.push_back({tmp.c_str(), [i, &sel]() { sel = (gpio_num_t)i; }});
-        }
-        loopOptions(options, index);
-        options.clear();
-        if (opt == 1) points.sck = sel;
-        else if (opt == 2) points.miso = sel;
-        else if (opt == 3) points.mosi = sel;
-        else if (opt == 4) points.cs = sel;
-        else if (opt == 5) points.io0 = sel;
-        else if (opt == 6) points.io2 = sel;
+        const auto pins = buildSelectablePins();
+        if (opt == 1) points.sck = selectPinFromMenu(pins, points.sck);
+        else if (opt == 2) points.miso = selectPinFromMenu(pins, points.miso);
+        else if (opt == 3) points.mosi = selectPinFromMenu(pins, points.mosi);
+        else if (opt == 4) points.cs = selectPinFromMenu(pins, points.cs);
+        else if (opt == 5) points.io0 = selectPinFromMenu(pins, points.io0);
+        else if (opt == 6) points.io2 = selectPinFromMenu(pins, points.io2);
         changed = true;
         goto RELOAD;
     }
@@ -1559,19 +1781,9 @@ RELOAD:
             bruceConfigPins.setUARTPins(value);
         }
     } else {
-        options = {};
-        gpio_num_t sel = GPIO_NUM_NC;
-        int index = 0;
-        if (opt == 1) index = points.rx + 1;
-        else if (opt == 2) index = points.tx + 1;
-        for (int8_t i = -1; i <= GPIO_NUM_MAX; i++) {
-            String tmp = String(i);
-            options.push_back({tmp.c_str(), [i, &sel]() { sel = (gpio_num_t)i; }});
-        }
-        loopOptions(options, index);
-        options.clear();
-        if (opt == 1) points.rx = sel;
-        else if (opt == 2) points.tx = sel;
+        const auto pins = buildSelectablePins();
+        if (opt == 1) points.rx = selectPinFromMenu(pins, points.rx);
+        else if (opt == 2) points.tx = selectPinFromMenu(pins, points.tx);
         changed = true;
         goto RELOAD;
     }
@@ -1602,19 +1814,9 @@ RELOAD:
             bruceConfigPins.setI2CPins(value);
         }
     } else {
-        options = {};
-        gpio_num_t sel = GPIO_NUM_NC;
-        int index = 0;
-        if (opt == 1) index = points.sda + 1;
-        else if (opt == 2) index = points.scl + 1;
-        for (int8_t i = -1; i <= GPIO_NUM_MAX; i++) {
-            String tmp = String(i);
-            options.push_back({tmp.c_str(), [i, &sel]() { sel = (gpio_num_t)i; }});
-        }
-        loopOptions(options, index);
-        options.clear();
-        if (opt == 1) points.sda = sel;
-        else if (opt == 2) points.scl = sel;
+        const auto pins = buildSelectablePins();
+        if (opt == 1) points.sda = selectPinFromMenu(pins, points.sda);
+        else if (opt == 2) points.scl = selectPinFromMenu(pins, points.scl);
         changed = true;
         goto RELOAD;
     }

@@ -38,6 +38,11 @@ void initUi() {
     canvas_bot_h = display_h * .9;
     canvas_peers_menu_h = display_h * .8;
     canvas_peers_menu_w = display_w * .8;
+
+    // Keep rendering regions valid on smaller displays.
+    if (canvas_top_h < 8) canvas_top_h = 8;
+    if (canvas_bot_h > display_h - 10) canvas_bot_h = display_h - 10;
+    if (canvas_bot_h <= canvas_top_h + 20) canvas_bot_h = canvas_top_h + 20;
 }
 
 String getRssiBars(signed int rssi) {
@@ -60,21 +65,23 @@ String getRssiBars(signed int rssi) {
 
 void drawTime() {
     tft.drawPixel(0, 0, 0);
-    tft.fillRect(80, 0, display_w, canvas_top_h - 3, bruceConfig.bgColor);
+    int32_t timeAreaH = canvas_top_h - 3;
+    if (timeAreaH < 1) timeAreaH = 1;
+    tft.fillRect(80, 0, display_w - 80, timeAreaH, bruceConfig.bgColor);
     tft.setTextDatum(TR_DATUM);
     unsigned long ellapsed = millis() / 1000;
-    int8_t h = ellapsed / 3600;
+    uint32_t h = ellapsed / 3600;
     int sr = ellapsed % 3600;
-    int8_t m = sr / 60;
-    int8_t s = sr % 60;
+    uint8_t m = sr / 60;
+    uint8_t s = sr % 60;
     char right_str[50] = "UPS 0%  UP 00:00:00";
-    sprintf(right_str, "UPS %i%% UP %02d:%02d:%02d", getBattery(), h, m, s);
+    sprintf(right_str, "UPS %i%% UP %02lu:%02u:%02u", getBattery(), h, m, s);
     tft.drawString(right_str, display_w, 3);
 }
 
 void drawFooterData(uint8_t friends_run, uint8_t friends_tot, String last_friend_name, signed int rssi) {
     tft.drawPixel(0, 0, 0);
-    tft.fillRect(0, canvas_bot_h + 1, display_w - 50, canvas_bot_h + 10, bruceConfig.bgColor);
+    tft.fillRect(0, canvas_bot_h + 1, display_w - 50, 10, bruceConfig.bgColor);
     tft.setTextSize(1);
     tft.setTextColor(bruceConfig.priColor);
     tft.setTextDatum(TL_DATUM);
@@ -136,7 +143,7 @@ void drawBottomCanvas() {
     tft.setTextDatum(TR_DATUM);
     // draw screen
     tft.drawPixel(0, 0, 0);
-    tft.fillRect(0, canvas_bot_h, display_w, canvas_bot_h + 10, bruceConfig.bgColor);
+    tft.fillRect(0, canvas_bot_h, display_w, 10, bruceConfig.bgColor);
     tft.drawString("NOT AI", display_w, canvas_bot_h + 5);
     tft.drawLine(0, canvas_bot_h, display_w, canvas_bot_h, bruceConfig.priColor);
 }
@@ -148,7 +155,10 @@ void drawMood(String face, String phrase, bool broken) {
     tft.setTextDatum(MC_DATUM);
     // draw screen
     tft.drawPixel(0, 0, 0);
-    tft.fillRect(0, canvas_top_h + 10, display_w, canvas_bot_h - 40, bruceConfig.bgColor);
+    int32_t moodY = canvas_top_h + 10;
+    int32_t moodH = canvas_bot_h - moodY - 10;
+    if (moodH < 1) moodH = 1;
+    tft.fillRect(0, moodY, display_w, moodH, bruceConfig.bgColor);
 #ifdef SMOOTH_FONT
     tft.drawCentreString(face, canvas_center_x, canvas_h / 3, SMOOTH_FONT);
 #else

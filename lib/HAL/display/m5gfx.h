@@ -90,7 +90,7 @@ public:
     SPIClass &getSPIinstance() const;
     void writecommand(uint8_t c);
 
-    void display();
+    void display(bool forceFull = false);
     void setAutoDisplay(bool enabled);
 
     uint32_t getTextColor() const;

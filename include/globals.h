@@ -208,6 +208,8 @@ extern volatile bool EscPress;
 
 extern volatile bool AnyKeyPress;
 
+extern volatile bool AuxPress;
+
 extern volatile bool NextPagePress;
 
 extern volatile bool PrevPagePress;

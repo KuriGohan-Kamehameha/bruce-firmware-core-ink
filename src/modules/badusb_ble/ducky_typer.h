@@ -36,6 +36,7 @@ void ducky_keyboard(HIDInterface *&hid, bool ble = false);
 
 // Send media commands through BLE or USB HID
 void MediaCommands(HIDInterface *hid, bool ble = false);
+void MediaCommandsCoreInk(HIDInterface *&hid, bool ble = false);
 
 DuckyCommand *findDuckyCommand(const char *cmd);
 DuckyCombination *findDuckyCombination(const char *cmd);

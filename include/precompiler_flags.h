@@ -147,6 +147,7 @@
 #endif
 
 //This one sets an array to set create the options to devices that have all GPIO available to use (except tft and SD Card)
+#ifndef GPIO_PIN_LIST
 #ifdef CONFIG_IDF_TARGET_ESP32S3
 #define GPIO_PIN_LIST { \
     {"GPIO 1",   1}, {"GPIO 2",   2}, {"GPIO 3",   3}, {"GPIO 4",   4}, {"GPIO 5",   5}, {"GPIO 6",   6}, {"GPIO 7",   7}, {"GPIO 8",   8}, {"GPIO 9",   9}, {"GPIO 10", 10}, \
@@ -167,6 +168,7 @@
   {"GPIO 21", 21}, {"GPIO 22", 22}, {"GPIO 23", 23}, {"GPIO 24", 24}, {"GPIO 25", 25}, {"GPIO 26", 26}, {"GPIO 27", 27}, {"GPIO 28", 28}, {"GPIO 29", 29}, {"GPIO 30", 30}, \
   {"GPIO 31", 31}, {"GPIO 32", 32}, {"GPIO 33", 33}, {"GPIO 34", 34}, {"GPIO 35", 35}, {"GPIO 36", 36}, {"GPIO 37", 37}, {"GPIO 38", 38}, {"GPIO 39", 39}, {"GPIO 0",   0} \
 }
+#endif
 #endif
 #ifdef ALLOW_ALL_GPIO_FOR_IR_RF
     #undef IR_TX_PINS

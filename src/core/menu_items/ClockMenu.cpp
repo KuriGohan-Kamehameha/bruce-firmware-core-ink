@@ -5,7 +5,8 @@
 
 void ClockMenu::optionsMenu() {
     while (!returnToMenu) {
-        runClockLoop(true);
+        if (analogClock) runAnalogClockLoop(true);
+        else runClockLoop(true);
 
         // If ESC is pressed on the watch, it exits
         if (returnToMenu) break;
@@ -20,9 +21,11 @@ void ClockMenu::optionsMenu() {
 
 void ClockMenu::showSubMenu() {
     options = {
-        {"Timer",         [=]() { Timer(); }            },
-        {"Back to Clock", [=]() {}                      },
-        {"Exit",          [=]() { returnToMenu = true; }}
+        {"Timer",         [=]() { Timer(); },                     false       },
+        {"Digital Clock", [this]() { analogClock = false; },      !analogClock},
+        {"Analog Clock",  [this]() { analogClock = true; },       analogClock },
+        {"Back to Clock", [=]() {},                               false       },
+        {"Exit",          [=]() { returnToMenu = true; },         false       }
         // Add more options here
     };
 

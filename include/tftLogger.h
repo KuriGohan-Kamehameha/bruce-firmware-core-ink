@@ -62,6 +62,9 @@ private:
 #if defined(HAS_EINK)
     bool einkDirty = false;
     uint32_t lastEinkFlushMs = 0;
+    uint32_t lastEinkFullFlushMs = 0;
+    bool einkForceFull = false;
+    uint32_t einkFlushesSinceFull = 0;
 #endif
     void clearLog();
     bool async_serial = false;
@@ -117,7 +120,8 @@ public:
     void stopAsyncSerial();
     void getTftInfo();
     void imageToBin(uint8_t fs, String file, int x, int y, bool center, int Ms);
-    bool flushEinkIfDirty(uint32_t minIntervalMs = 250);
+    bool flushEinkIfDirty(uint32_t minIntervalMs = 250, bool allowFullRefresh = true);
+    void requestEinkFullRefresh();
 
     void drawLine(int32_t x, int32_t y, int32_t x1, int32_t y1, int32_t color);
     void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t color);

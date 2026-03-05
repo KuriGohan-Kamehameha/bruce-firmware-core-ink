@@ -26,6 +26,9 @@ void BleMenu::optionsMenu() {
     }
 
     options.push_back({"Media Cmds", [=]() { MediaCommands(hid_ble, true); }});
+#if defined(ARDUINO_M5STACK_COREINK)
+    options.push_back({"Media CoreInk", [=]() { MediaCommandsCoreInk(hid_ble, true); }});
+#endif
 #if !defined(LITE_VERSION)
     options.push_back({"Presenter", [=]() { PresenterMode(hid_ble, true); }});
     options.push_back({"BLE Scan", ble_scan});
