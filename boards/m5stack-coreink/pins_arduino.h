@@ -39,6 +39,8 @@ static const uint8_t G33 = 33;
 static const uint8_t G34 = 34;
 static const uint8_t G35 = 35;
 static const uint8_t G36 = 36;
+static const uint8_t G37 = 37;
+static const uint8_t G38 = 38;
 static const uint8_t G39 = 39;
 
 static const uint8_t DAC1 = 25;

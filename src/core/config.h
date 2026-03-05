@@ -37,8 +37,10 @@ public:
 
     //  Settings
     int dimmerSet = 10;
+    int autoPowerOffMinutes = 0;
     int bright = 100;
     int einkRefreshMs = 15000;
+    int einkRefreshDraws = 10;
     bool automaticTimeUpdateViaNTP = true;
     float tmz = 0;
     bool dst = false;
@@ -127,10 +129,14 @@ public:
     // Settings
     void setDimmer(int value);
     void validateDimmerValue();
+    void setAutoPowerOffMinutes(int value);
+    void validateAutoPowerOffMinutes();
     void setBright(uint8_t value);
     void validateBrightValue();
     void setEinkRefreshMs(int value);
     void validateEinkRefreshMs();
+    void setEinkRefreshDraws(int value);
+    void validateEinkRefreshDraws();
     void setAutomaticTimeUpdateViaNTP(bool value);
     void setTmz(float value);
     void validateTmzValue();

@@ -260,10 +260,13 @@ void displaySpamStatus() {
     drawTopCanvas();
     drawBottomCanvas();
     tft.fillRect(0, 20, tftWidth, tftHeight - 40, bruceConfig.bgColor);
-    tft.setTextSize(1.5);
+    tft.setTextSize(1);
     tft.setCursor(0, 20);
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.println("PwnGrid Spam Running...");
+#if defined(HAS_EINK)
+    einkFlushIfDirty(0);
+#endif
 
 #if defined(HAS_TOUCH)
     TouchFooter();
@@ -289,6 +292,9 @@ void displaySpamStatus() {
             change_identity = !change_identity;
             Serial.printf("Change Identity %s.\n", change_identity ? "enabled" : "disabled");
         }
+
+        // Keep dynamic area clean so short/long strings don't leave stale text.
+        tft.fillRect(0, 45, tftWidth, 80, bruceConfig.bgColor);
 
         // Update and display current face, name, and channel
         tft.setCursor(45, 45);
@@ -320,6 +326,9 @@ void displaySpamStatus() {
         if (num_names > 0) current_name_index = (current_name_index + 1) % num_names;
         current_channel_index = (current_channel_index + 1) % num_channels;
 
+#if defined(HAS_EINK)
+        einkFlushIfDirty(250);
+#endif
         vTaskDelay(200 / portTICK_RATE_MS);
         ; // Update the display every 200 ms
     }
@@ -365,7 +374,7 @@ void loadFacesAndNames() {
         return;
     }
 
-    filepath = loopSD(*fs, true, "txt");
+    filepath = loopSD(*fs, true, "txt", "/pwnagotchi");
     if (filepath.length() == 0) {
         loadDefaultFacesAndNames();
         return;
@@ -406,6 +415,13 @@ void loadFacesAndNames() {
 
 void send_pwnagotchi_beacon_main() {
     ensureWifiPlatform();
+    // Ensure each run starts in normal mode.
+    dos_pwnd = false;
+    change_identity = false;
+    stop_beacon = false;
+    // Clear any residual key state from the menu/file selection step.
+    check(AnyKeyPress);
+    vTaskDelay(220 / portTICK_PERIOD_MS);
 
     // Initialiser NVS
     esp_err_t ret = nvs_flash_init();

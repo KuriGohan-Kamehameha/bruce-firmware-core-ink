@@ -43,6 +43,18 @@ void einkFlushIfDirty(uint32_t minIntervalMs) {
 #endif
 }
 
+void einkFlushIfDirtyPartial(uint32_t minIntervalMs) {
+#if defined(HAS_EINK)
+    tft.flushEinkIfDirty(minIntervalMs, false);
+#endif
+}
+
+void einkRequestFullRefresh() {
+#if defined(HAS_EINK)
+    tft.requestEinkFullRefresh();
+#endif
+}
+
 static String clipMenuLabel(const String &label, int maxChars) {
     if (maxChars <= 0) return String();
     if (label.length() <= static_cast<size_t>(maxChars)) return label;
@@ -149,6 +161,47 @@ bool wakeUpScreen() {
         return true;
     }
     return false;
+#endif
+}
+
+void drawPowerOffFrame() {
+#if !defined(HAS_SCREEN)
+    return;
+#else
+    tft.fillScreen(bruceConfig.bgColor);
+    tft.drawRect(0, 0, tftWidth, tftHeight, bruceConfig.priColor);
+    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+
+    int logoBottom = tftHeight / 2;
+#if !defined(LITE_VERSION)
+    int logoY = (tftHeight - bruce_small_height) / 2 - 35;
+    if (logoY < 16) logoY = 16;
+    int logoX = (tftWidth - bruce_small_width) / 2;
+    tft.drawXBitmap(
+        logoX,
+        logoY,
+        bruce_small_bits,
+        bruce_small_width,
+        bruce_small_height,
+        bruceConfig.priColor,
+        bruceConfig.bgColor
+    );
+    logoBottom = logoY + bruce_small_height;
+#else
+    tft.setTextSize(FM);
+    tft.drawCentreString("BRUCE", tftWidth / 2, 34, 1);
+    logoBottom = 60;
+#endif
+
+    tft.setTextSize(FP);
+    tft.drawCentreString("Device is powered off", tftWidth / 2, logoBottom + 14, 1);
+    tft.drawCentreString("Press power to wake", tftWidth / 2, logoBottom + 26, 1);
+
+#if defined(HAS_EINK)
+    einkFlushIfDirty(0);
+#else
+    tft.drawPixel(0, 0, bruceConfig.bgColor);
+#endif
 #endif
 }
 

@@ -322,18 +322,44 @@ uint16_t tft_logger::mapColor(uint32_t color) {
 #endif
 }
 
-bool tft_logger::flushEinkIfDirty(uint32_t minIntervalMs) {
+bool tft_logger::flushEinkIfDirty(uint32_t minIntervalMs, bool allowFullRefresh) {
 #if defined(HAS_EINK)
     if (!einkDirty) return false;
     uint32_t now = millis();
     if ((now - lastEinkFlushMs) < minIntervalMs) return false;
+
+    bool forceFull = false;
+    if (allowFullRefresh) {
+        forceFull = einkForceFull || (lastEinkFullFlushMs == 0);
+        if (!forceFull && bruceConfig.einkRefreshDraws > 0) {
+            const uint32_t refreshDraws = static_cast<uint32_t>(bruceConfig.einkRefreshDraws);
+            forceFull = (einkFlushesSinceFull + 1) >= refreshDraws;
+        }
+        if (!forceFull && bruceConfig.einkRefreshMs > 0) {
+            forceFull = (now - lastEinkFullFlushMs) >= static_cast<uint32_t>(bruceConfig.einkRefreshMs);
+        }
+    }
+
     lastEinkFlushMs = now;
     einkDirty = false;
-    BRUCE_TFT_DRIVER::display();
+    BRUCE_TFT_DRIVER::display(forceFull);
+    if (forceFull) {
+        lastEinkFullFlushMs = now;
+        einkForceFull = false;
+        einkFlushesSinceFull = 0;
+    } else {
+        ++einkFlushesSinceFull;
+    }
     return true;
 #else
     (void)minIntervalMs;
     return false;
+#endif
+}
+
+void tft_logger::requestEinkFullRefresh() {
+#if defined(HAS_EINK)
+    einkForceFull = true;
 #endif
 }
 
