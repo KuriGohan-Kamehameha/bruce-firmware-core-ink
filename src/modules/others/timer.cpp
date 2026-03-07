@@ -10,6 +10,7 @@
 #include "core/display.h"
 #include "core/utils.h"
 #include "modules/others/audio.h"
+#include "modules/others/clock_alert_tones.h"
 
 // Constants for better maintainability
 #define DELAY_VALUE 150
@@ -18,6 +19,8 @@
 #define MAX_HOURS 99
 #define MAX_MINUTES 59
 #define MAX_SECONDS 59
+constexpr unsigned long MAX_TIMER_DURATION_MS =
+    ((MAX_HOURS * 3600UL) + (MAX_MINUTES * 60UL) + MAX_SECONDS) * 1000UL;
 
 // Enum for better readability
 enum SettingMode {
@@ -25,7 +28,8 @@ enum SettingMode {
     SETTING_MINUTES = 1,
     SETTING_SECONDS = 2,
     SETTING_SOUND = 3,
-    SETTING_COMPLETE = 4
+    SETTING_TONE = 4,
+    SETTING_COMPLETE = 5
 };
 
 Timer::Timer() { setup(); }
@@ -40,6 +44,7 @@ void Timer::setup() {
     int minutes = 0;
     int seconds = 0;
     playSoundOnFinish = true; // Default: sound enabled
+    alertTone = bruceConfig.timerAlertTone;
     SettingMode settingMode = SETTING_HOURS;
 
     char timeString[12];
@@ -62,17 +67,25 @@ void Timer::setup() {
             case SETTING_HOURS:
                 underlineHours();
                 drawSoundOption(false); // Show but don't highlight
+                drawToneOption(false);
                 break;
             case SETTING_MINUTES:
                 underlineMinutes();
                 drawSoundOption(false);
+                drawToneOption(false);
                 break;
             case SETTING_SECONDS:
                 underlineSeconds();
                 drawSoundOption(false);
+                drawToneOption(false);
                 break;
             case SETTING_SOUND:
                 drawSoundOption(true); // Highlight sound option
+                drawToneOption(false);
+                break;
+            case SETTING_TONE:
+                drawSoundOption(false);
+                drawToneOption(true);
                 break;
             default: break;
         }
@@ -89,6 +102,11 @@ void Timer::setup() {
                 case SETTING_SOUND:
                     playSoundOnFinish = !playSoundOnFinish; // Toggle
                     break;
+                case SETTING_TONE:
+                    alertTone = (alertTone >= CLOCK_ALERT_TONE_MAX) ? CLOCK_ALERT_TONE_MIN : alertTone + 1;
+                    bruceConfig.setTimerAlertTone(alertTone);
+                    if (playSoundOnFinish) playClockAlertTonePreview(alertTone);
+                    break;
                 default: break;
             }
         }
@@ -101,6 +119,11 @@ void Timer::setup() {
                 case SETTING_SECONDS: seconds = (seconds <= 0) ? MAX_SECONDS : seconds - 1; break;
                 case SETTING_SOUND:
                     playSoundOnFinish = !playSoundOnFinish; // Toggle
+                    break;
+                case SETTING_TONE:
+                    alertTone = (alertTone <= CLOCK_ALERT_TONE_MIN) ? CLOCK_ALERT_TONE_MAX : alertTone - 1;
+                    bruceConfig.setTimerAlertTone(alertTone);
+                    if (playSoundOnFinish) playClockAlertTonePreview(alertTone);
                     break;
                 default: break;
             }
@@ -131,7 +154,7 @@ void Timer::setup() {
 bool Timer::responsiveDelay(unsigned long ms) {
     unsigned long start = millis();
     while (millis() - start < ms) {
-        if (check(SelPress) || check(EscPress)) {
+        if (check(SelPress) || check(EscPress) || check(NextPress) || check(PrevPress) || check(AuxPress)) {
             return true; // Button Pressed
         }
         delay(10); // Check every 10ms
@@ -140,61 +163,89 @@ bool Timer::responsiveDelay(unsigned long ms) {
 }
 
 void Timer::loop() {
-    unsigned long startMillis = millis();
-    unsigned long lastUpdateMillis = 0;
-
-    int lastSeconds = -1; // Track last displayed value to avoid unnecessary redraws
-    char timeString[12];
+    unsigned long remainingMs = static_cast<unsigned long>(duration);
+    unsigned long lastTickMs = millis();
+    bool running = true;
+    bool forceRedraw = true;
+    int lastDisplayedSeconds = -1;
+    bool lastRunningState = true;
+    char timeString[16];
 
     tft.fillScreen(bruceConfig.bgColor);
 
     // Countdown loop
     while (true) {
-        unsigned long currentMillis = millis();
-
-        // Calculate elapsed time (handles millis() overflow correctly)
-        unsigned long elapsedMillis = currentMillis - startMillis;
-
         // Check for ESC/BACK button - exit timer
         if (check(EscPress)) { break; }
 
-        // Check if timer has completed
-        if (elapsedMillis >= duration) {
+        unsigned long currentMillis = millis();
+
+        if (check(SelPress)) {
+            running = !running;
+            forceRedraw = true;
+            lastTickMs = currentMillis;
+        }
+
+        if (check(NextPress)) {
+            if (remainingMs + 60000UL > MAX_TIMER_DURATION_MS) remainingMs = MAX_TIMER_DURATION_MS;
+            else remainingMs += 60000UL;
+            forceRedraw = true;
+        }
+
+        if (check(PrevPress)) {
+            if (remainingMs > 60000UL) remainingMs -= 60000UL;
+            else if (remainingMs > 1000UL) remainingMs = 1000UL;
+            forceRedraw = true;
+        }
+
+        if (running && remainingMs > 0UL) {
+            unsigned long elapsedMs = currentMillis - lastTickMs;
+            if (elapsedMs >= remainingMs) remainingMs = 0UL;
+            else remainingMs -= elapsedMs;
+        }
+        lastTickMs = currentMillis;
+
+        if (remainingMs == 0UL) {
             // Play alarm pattern only if enabled
             if (playSoundOnFinish) { playAlarmPattern(); }
             break;
         }
 
-        // Update display only once per second to reduce flicker and CPU usage
-        if (currentMillis - lastUpdateMillis >= DISPLAY_UPDATE_INTERVAL) {
-            unsigned long remainingMillis = duration - elapsedMillis;
+        int seconds = (remainingMs / 1000UL) % 60UL;
+        int minutes = (remainingMs / 60000UL) % 60UL;
+        int hours = (remainingMs / 3600000UL) % 100UL;
+        bool stateChanged = (running != lastRunningState);
 
-            int seconds = (remainingMillis / 1000) % 60;
-            int minutes = (remainingMillis / 60000) % 60;
-            int hours = (remainingMillis / 3600000) % 100;
+        if (forceRedraw || seconds != lastDisplayedSeconds || stateChanged) {
+            snprintf(timeString, sizeof(timeString), "%02d:%02d:%02d", hours, minutes, seconds);
 
-            // Only redraw if the seconds value changed
-            if (seconds != lastSeconds) {
-                snprintf(timeString, sizeof(timeString), "%02d:%02d:%02d", hours, minutes, seconds);
-
-                // Calculate optimal font size based on display width
-                uint8_t f_size = 4;
-                for (uint8_t i = 4; i > 0; i--) {
-                    if (i * LW * 8 < (tftWidth - BORDER_PAD_X * 2)) {
-                        f_size = i;
-                        break;
-                    }
+            // Calculate optimal font size based on display width
+            uint8_t f_size = 4;
+            for (uint8_t i = 4; i > 0; i--) {
+                if (i * LW * 8 < (tftWidth - BORDER_PAD_X * 2)) {
+                    f_size = i;
+                    break;
                 }
-
-                drawMainBorder(false);
-                tft.setTextSize(f_size);
-                tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-                tft.drawCentreString(timeString, timerX, timerY, 1);
-
-                lastSeconds = seconds;
             }
 
-            lastUpdateMillis = currentMillis;
+            drawMainBorder(false);
+            tft.setTextSize(f_size);
+            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+            tft.drawCentreString(timeString, timerX, timerY, 1);
+
+            const int statusY = timerY + (f_size * LH) + 4;
+            tft.fillRect(BORDER_PAD_X + 2, statusY, tftWidth - (2 * BORDER_PAD_X) - 4, 10, bruceConfig.bgColor);
+            tft.setTextSize(1);
+            tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+            tft.drawCentreString(running ? "RUNNING" : "PAUSED", timerX, statusY, 1);
+
+            const int hintY = statusY + 10;
+            tft.fillRect(BORDER_PAD_X + 2, hintY, tftWidth - (2 * BORDER_PAD_X) - 4, 10, bruceConfig.bgColor);
+            tft.drawCentreString("SEL: Pause/Run  Prev/Next: -/+1 min", timerX, hintY, 1);
+
+            lastDisplayedSeconds = seconds;
+            lastRunningState = running;
+            forceRedraw = false;
         }
 
         delay(INPUT_POLL_DELAY); // CPU saving delay
@@ -212,27 +263,16 @@ void Timer::playAlarmPattern() {
 
     tft.setTextSize(1);
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
-    tft.drawCentreString("Press SEL or BACK to stop", timerX, timerY + (2 * LH), 1);
+    tft.drawCentreString(clockAlertToneLabel(alertTone), timerX, timerY + LH, 1);
+    tft.drawCentreString("Press any key to stop", timerX, timerY + (2 * LH), 1);
 
     // Alarm pattern loop - continues until user stops it
     while (true) {
         // Check if user wants to stop the alarm
-        if (check(SelPress) || check(EscPress)) { break; }
+        if (check(SelPress) || check(EscPress) || check(NextPress) || check(PrevPress) || check(AuxPress)) { break; }
 
-        // Pattern:
-        _tone(2000, 1000);
-
-        if (check(SelPress) || check(EscPress)) { break; }
-        if (responsiveDelay(100)) { break; }
-
-        _tone(6000, 1000);
-
-        if (check(SelPress) || check(EscPress)) { break; }
-        if (responsiveDelay(50)) { break; }
-
-        _tone(6000, 1000);
-        if (check(SelPress) || check(EscPress)) { break; }
-        if (responsiveDelay(800)) { break; }
+        playClockAlertToneOnce(alertTone);
+        if (responsiveDelay(120)) { break; }
     }
 }
 
@@ -273,7 +313,6 @@ void Timer::drawSoundOption(bool highlight) {
 
     // Choose colors based on highlight state
     uint16_t textColor = highlight ? bruceConfig.priColor : TFT_DARKGREY;
-    uint16_t statusColor = playSoundOnFinish ? TFT_GREEN : TFT_RED;
 
     // Clear the line first
     tft.fillRect(BORDER_PAD_X, optionY, tftWidth - BORDER_PAD_X * 2, LH + 2, bruceConfig.bgColor);
@@ -292,6 +331,29 @@ void Timer::drawSoundOption(bool highlight) {
         int startX = timerX - (textWidth / 2);
         int endX = timerX + (textWidth / 2);
 
+        tft.drawLine(startX, indicatorY, endX, indicatorY, bruceConfig.priColor);
+    }
+}
+
+void Timer::drawToneOption(bool highlight) {
+    int optionY = underlineY + (3 * LH) + 2;
+
+    tft.setTextSize(1);
+    uint16_t textColor = highlight ? bruceConfig.priColor : TFT_DARKGREY;
+
+    tft.fillRect(BORDER_PAD_X, optionY, tftWidth - BORDER_PAD_X * 2, LH + 2, bruceConfig.bgColor);
+
+    char optionText[36];
+    snprintf(optionText, sizeof(optionText), "Tone: %s", clockAlertToneLabel(alertTone));
+
+    tft.setTextColor(textColor, bruceConfig.bgColor);
+    tft.drawCentreString(optionText, timerX, optionY, 1);
+
+    if (highlight) {
+        int indicatorY = optionY + LH + 2;
+        int textWidth = strlen(optionText) * LW;
+        int startX = timerX - (textWidth / 2);
+        int endX = timerX + (textWidth / 2);
         tft.drawLine(startX, indicatorY, endX, indicatorY, bruceConfig.priColor);
     }
 }

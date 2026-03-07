@@ -11,9 +11,20 @@
 #include <functional>
 #include <string>
 #include <vector>
+
 io_expander ioExpander;
 BruceConfig bruceConfig;
 BruceConfigPins bruceConfigPins;
+
+namespace {
+constexpr char kHardcodedWifiSsid[] = "IoTA";
+constexpr char kHardcodedWifiPassword[] = "keyforaccesstothisrestrictedwirelessnnetwork";
+
+void applyHardcodedWifiConfig() {
+    bruceConfig.wifiAtStartup = 1;
+    bruceConfig.wifi[kHardcodedWifiSsid] = kHardcodedWifiPassword;
+}
+} // namespace
 
 SerialCli serialCli;
 USBSerial USBserial;
@@ -85,7 +96,7 @@ void __attribute__((weak)) taskInputHandler(void *parameter) {
 #endif
             timer = millis();
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(5));
     }
 }
 // Public Globals Variables
@@ -168,10 +179,12 @@ void begin_storage() {
     if (!LittleFS.begin(true)) { LittleFS.format(), LittleFS.begin(); }
     bool checkFS = setupSdCard();
     bruceConfig.fromFile(checkFS);
+    applyHardcodedWifiConfig();
     bruceConfigPins.fromFile(checkFS);
 #if !defined(BUZZ_PIN) && !defined(HAS_NS4168_SPKR)
     // Boards without an audio output keep sound disabled to avoid dead-end audio paths.
     if (bruceConfig.soundEnabled != 0) { bruceConfig.setSoundEnabled(0); }
+    if (bruceConfig.menuBeepEnabled != 0) { bruceConfig.setMenuBeepEnabled(0); }
 #endif
 #if !defined(LITE_VERSION)
     ensureAppStorePreinstalled();
@@ -298,7 +311,7 @@ void boot_screen_anim() {
     else if (boot_img == 0 && LittleFS.exists("/boot.gif")) boot_img = 4;
     if (bruceConfig.theme.boot_img) boot_img = 5; // override others
 
-    tft.drawPixel(0, 0, 0);       // Forces back communication with TFT, to avoid ghosting
+    displayBusKeepAlive();       // Forces back communication with TFT, to avoid ghosting
                                   // Start image loop
     while (millis() < i + 7000) { // boot image lasts for 5 secs
         if ((millis() - i > 2000) && !drawn) {
@@ -328,7 +341,7 @@ void boot_screen_anim() {
                     drawImg(LittleFS, "/boot.gif", 0, 0, true, 3600);
                     Serial.println("Image from LittleFS");
                 }
-                tft.drawPixel(0, 0, 0); // Forces back communication with TFT, to avoid ghosting
+                displayBusKeepAlive(); // Forces back communication with TFT, to avoid ghosting
             }
             drawn = true;
         }
@@ -376,6 +389,9 @@ void boot_screen_anim() {
  **  Clock initialisation for propper display in menu
  *********************************************************************/
 void init_clock() {
+    configureTorontoTimezone();
+    constexpr time_t kMinValidEpoch = 1704067200; // 2024-01-01 00:00:00 UTC
+
 #if defined(HAS_RTC)
     _rtc.begin();
 #if defined(HAS_RTC_BM8563)
@@ -394,18 +410,60 @@ void init_clock() {
     timeinfo.tm_mday = _date.Date;
     timeinfo.tm_mon = _date.Month > 0 ? _date.Month - 1 : 0;
     timeinfo.tm_year = _date.Year >= 1900 ? _date.Year - 1900 : 0;
-    time_t epoch = mktime(&timeinfo);
-    struct timeval tv = {.tv_sec = epoch};
+    const time_t rtcEpoch = mktime(&timeinfo);
+
+    if (rtcEpoch >= kMinValidEpoch) {
+        localTime = rtcEpoch;
+        struct timeval tv = {.tv_sec = rtcEpoch, .tv_usec = 0};
+        settimeofday(&tv, nullptr);
+        updateTimeStr(_rtc.getTimeStruct());
+        clock_set = true;
+        return;
+    }
+
+    if (restoreClockFromPersistedTime()) return;
+
+    struct tm fallback = {};
+    fallback.tm_year = CURRENT_YEAR - 1900;
+    fallback.tm_mon = 0;
+    fallback.tm_mday = 1;
+    fallback.tm_hour = 0;
+    fallback.tm_min = 0;
+    fallback.tm_sec = 0;
+    const time_t fallbackEpoch = mktime(&fallback);
+
+    localTime = fallbackEpoch;
+    struct timeval tv = {.tv_sec = fallbackEpoch, .tv_usec = 0};
     settimeofday(&tv, nullptr);
+
+    RTC_TimeTypeDef timeStruct = {};
+    timeStruct.Hours = fallback.tm_hour;
+    timeStruct.Minutes = fallback.tm_min;
+    timeStruct.Seconds = fallback.tm_sec;
+    _rtc.SetTime(&timeStruct);
+
+    RTC_DateTypeDef dateStruct = {};
+    dateStruct.WeekDay = fallback.tm_wday;
+    dateStruct.Month = fallback.tm_mon + 1;
+    dateStruct.Date = fallback.tm_mday;
+    dateStruct.Year = fallback.tm_year + 1900;
+    _rtc.SetDate(&dateStruct);
+
+    updateTimeStr(_rtc.getTimeStruct());
+    clock_set = true;
 #else
+    if (restoreClockFromPersistedTime()) return;
+
     struct tm timeinfo = {};
     timeinfo.tm_year = CURRENT_YEAR - 1900;
     timeinfo.tm_mon = 0x05;
     timeinfo.tm_mday = 0x14;
-    time_t epoch = mktime(&timeinfo);
+    const time_t epoch = mktime(&timeinfo);
+    localTime = epoch;
     rtc.setTime(epoch);
     clock_set = true;
-    struct timeval tv = {.tv_sec = epoch};
+    updateTimeStr(rtc.getTimeStruct());
+    struct timeval tv = {.tv_sec = epoch, .tv_usec = 0};
     settimeofday(&tv, nullptr);
 #endif
 }
@@ -428,10 +486,21 @@ void startup_sound() {
     if (bruceConfig.soundEnabled == 0) return; // if sound is disabled, do not play sound
 #if !defined(LITE_VERSION)
 #if defined(BUZZ_PIN)
-    // Bip M5 just because it can. Does not bip if splashscreen is bypassed
-    _tone(5000, 50);
-    delay(200);
-    _tone(5000, 50);
+    if (bruceConfig.startupChimeStyle == 1) {
+        // Optional four-tone startup chime with longer notes for cleaner buzzer tone.
+        constexpr uint16_t kStartupChimeHz[] = {1568, 1976, 2637, 3136};
+        constexpr uint16_t kStartupChimeToneMs = 95;
+        constexpr uint16_t kStartupChimeGapMs = 45;
+        for (size_t i = 0; i < (sizeof(kStartupChimeHz) / sizeof(kStartupChimeHz[0])); ++i) {
+            _tone(kStartupChimeHz[i], kStartupChimeToneMs);
+            if (i + 1 < (sizeof(kStartupChimeHz) / sizeof(kStartupChimeHz[0]))) delay(kStartupChimeGapMs);
+        }
+    } else {
+        // Classic two-tone startup chirp.
+        _tone(1760, 90);
+        delay(70);
+        _tone(2349, 140);
+    }
     /*  2fix: menu infinite loop */
 #elif defined(HAS_NS4168_SPKR)
     // play a boot sound

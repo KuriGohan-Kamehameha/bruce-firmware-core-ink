@@ -3,6 +3,7 @@ bool isConnectedWireguard = false;
 #include "wg.h"
 #include "core/display.h"
 #include "core/sd_functions.h"
+#include "core/utils.h"
 #include "core/wifi/wifi_common.h"
 #include <WireGuard-ESP32.h>
 #include <globals.h>
@@ -122,7 +123,8 @@ void wg_setup() {
     read_and_parse_file();
 
     Serial.println("Adjusting system time...");
-    configTime(9 * 60 * 60, 0, "ntp.jst.mfeed.ad.jp", "ntp.nict.jp");
+    configureTorontoTimezone();
+    if (!updateClockTimezone()) { Serial.println("NTP sync unavailable, continuing with existing system time"); }
     tft.fillScreen(bruceConfig.bgColor);
     tft.setCursor(0, 0);
 

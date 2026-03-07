@@ -4,6 +4,9 @@
 #include "mykeyboard.h"
 #include "settings.h" //for timeStr
 #include "utils.h"
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+#include "modules/others/audio.h"
+#endif
 #include <JPEGDecoder.h>
 #include <interface.h> //for charging ischarging to print charging indicator
 #include <memory>
@@ -60,6 +63,77 @@ static String clipMenuLabel(const String &label, int maxChars) {
     if (label.length() <= static_cast<size_t>(maxChars)) return label;
     if (maxChars <= 3) return label.substring(0, maxChars);
     return label.substring(0, maxChars - 3) + "...";
+}
+
+static bool canPlayMenuBeep(uint32_t minIntervalMs = 35U) {
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+    static uint32_t lastBeepMs = 0;
+    if (!bruceConfig.soundEnabled) return false;
+    if (bruceConfig.menuBeepEnabled == NAVIGATION_SOUND_OFF) return false;
+
+    const uint32_t nowMs = millis();
+    if ((nowMs - lastBeepMs) < minIntervalMs) return false;
+    lastBeepMs = nowMs;
+    return true;
+#else
+    (void)minIntervalMs;
+    return false;
+#endif
+}
+
+static void playMenuClick(uint16_t frequency) {
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+#if defined(BUZZ_PIN)
+    constexpr uint16_t kClickPulseMs = 2;
+#else
+    constexpr uint16_t kClickPulseMs = 6;
+#endif
+    _tone(frequency, kClickPulseMs);
+#else
+    (void)frequency;
+#endif
+}
+
+static void playMenuNavigationBeep(uint16_t frequency, uint16_t durationMs = 14) {
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+    if (!canPlayMenuBeep()) return;
+    if (bruceConfig.menuBeepEnabled == NAVIGATION_SOUND_CLICKS) {
+        playMenuClick(frequency);
+        return;
+    }
+    _tone(frequency, durationMs);
+#else
+    (void)frequency;
+    (void)durationMs;
+#endif
+}
+
+static void playMenuBackBeep() {
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+    if (!canPlayMenuBeep()) return;
+    if (bruceConfig.menuBeepEnabled == NAVIGATION_SOUND_CLICKS) {
+        playMenuClick(2200);
+        delay(10);
+        playMenuClick(1700);
+        return;
+    }
+    _tone(2500, 10);
+    _tone(1700, 26);
+#endif
+}
+
+static void playMenuSelectBeep() {
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
+    if (!canPlayMenuBeep()) return;
+    if (bruceConfig.menuBeepEnabled == NAVIGATION_SOUND_CLICKS) {
+        playMenuClick(3200);
+        delay(8);
+        playMenuClick(4200);
+        return;
+    }
+    _tone(3200, 10);
+    _tone(4400, 20);
+#endif
 }
 /***************************************************************************************
 ** Function name: displayScrollingText
@@ -218,7 +292,7 @@ void displayRedStripe(String text, uint16_t fgcolor, uint16_t bgcolor) {
     if (text.length() * LW * FM < (tftWidth - 2 * FM * LW)) size = FM;
     else size = FP;
 #if !defined(HAS_EINK)
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
 #endif
     tft.fillRoundRect(10, tftHeight / 2 - 13, tftWidth - 20, 26, 7, bgcolor);
     tft.setTextColor(fgcolor, bgcolor);
@@ -572,7 +646,7 @@ int loopOptions(
         );
     if (index < 0 || index >= static_cast<int>(options.size())) index = 0;
     bool firstRender = true;
-    drawMainBorder();
+    drawMainBorder(true, menuType != MENU_TYPE_MAIN);
     while (1) {
         // Check for shutdown before drawing menu to avoid drawing a black bar on the screen
         if (exit) break;
@@ -585,7 +659,7 @@ int loopOptions(
 #if !defined(HAS_EINK)
             if (millis() - _clock_bat_timer > 30000) {
                 _clock_bat_timer = millis();
-                drawStatusBar(); // update clock and battery status each 30s
+                drawStatusBar(false); // update clock and battery status each 30s
             }
 #endif
         }
@@ -634,6 +708,7 @@ int loopOptions(
         // Same happens to Core and some other boards
         if (EscPress && PrevPress) EscPress = false;
         if (menuType != MENU_TYPE_MAIN && check(EscPress)) {
+            playMenuBackBeep();
             index = -1;
             break;
         }
@@ -645,6 +720,7 @@ int loopOptions(
             if (index == 0) index = options.size() - 1;
             else if (index > 0) index--;
             redraw = true;
+            playMenuNavigationBeep(3200, 12);
 #else
             long _tmp = millis();
 #ifndef HAS_ENCODER // T-Embed doesn't need it
@@ -673,6 +749,7 @@ int loopOptions(
             LongPress = false;
 #endif
             if (millis() - _tmp > 700) { // longpress detected to exit
+                playMenuBackBeep();
                 index = -1;
                 break;
             } else {
@@ -680,6 +757,7 @@ int loopOptions(
                 if (index == 0) index = options.size() - 1;
                 else if (index > 0) index--;
                 redraw = true;
+                playMenuNavigationBeep(3200, 12);
             }
 #endif
         }
@@ -691,13 +769,15 @@ int loopOptions(
                 index = 0;
             }
             redraw = true;
+            playMenuNavigationBeep(3600, 12);
         }
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(5 / portTICK_PERIOD_MS);
 
         /* Select and run function
         forceMenuOption is set by a SerialCommand to force a selection within the menu
         */
-        if (check(SelPress) || forceMenuOption >= 0) {
+        bool selectPressed = check(SelPress);
+        if (selectPressed || forceMenuOption >= 0) {
             uint16_t chosen = index;
             if (forceMenuOption >= 0) {
                 chosen = forceMenuOption;
@@ -708,6 +788,7 @@ int loopOptions(
                 log_w("Invalid menu selection index %u (size=%u)", chosen, options.size());
                 continue;
             }
+            if (selectPressed) playMenuSelectBeep();
             Serial.println("Selected: " + String(options[chosen].label));
             options[chosen].operation();
             if (options[chosen].keepOpen) {
@@ -732,7 +813,6 @@ void progressHandler(int progress, size_t total, String message) {
     int barWidth = map(progress, 0, total, 0, tftWidth - 40);
     if (barWidth < 3) {
         tft.fillRect(6, 27, tftWidth - 12, tftHeight - 33, bruceConfig.bgColor);
-        tft.drawRect(18, tftHeight - 47, tftWidth - 36, 17, bruceConfig.priColor);
         displayRedStripe(message, TFT_WHITE, bruceConfig.priColor);
     }
     tft.fillRect(20, tftHeight - 45, barWidth, 13, bruceConfig.priColor);
@@ -830,7 +910,7 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.setTextSize(FP);
 #if !defined(HAS_EINK)
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
 #endif
     tft.setTextWrap(false);
     tft.fillRect(6, 30, tftWidth - 12, 8 * FP, bruceConfig.bgColor);
@@ -903,10 +983,11 @@ void drawSubmenu(int index, std::vector<Option> &options, const char *title) {
 #endif
 }
 
-void drawStatusBar() {
+void drawStatusBar(bool showBorder) {
     int i = 0;
     uint8_t bat = getBattery();
     uint8_t bat_margin = 85;
+    constexpr int WIFI_STATUS_ICON_X_OFFSET = 4;
     if (bat > 0) {
         drawBatteryStatus(bat);
     } else bat_margin = 26;
@@ -921,7 +1002,7 @@ void drawStatusBar() {
         i++;
     }
     if (WiFi.getMode()) {
-        drawWifiSmall(tftWidth - (bat_margin + 23 * i), 7);
+        drawWifiSmall(tftWidth - (bat_margin + 23 * i) - WIFI_STATUS_ICON_X_OFFSET, 7);
         i++;
     } // Draw Wifi Symbol beside battery
     if (isWebUIActive) {
@@ -937,7 +1018,7 @@ void drawStatusBar() {
         i++;
     } // Draw Wg bedide BLE, if the others exist, if not, beside battery
 
-    if (bruceConfig.theme.border) {
+    if (showBorder && bruceConfig.theme.border) {
         tft.drawRoundRect(5, 5, tftWidth - 10, tftHeight - 10, 5, bruceConfig.priColor);
         tft.drawLine(5, 25, tftWidth - 6, 25, bruceConfig.priColor);
     }
@@ -965,10 +1046,10 @@ void drawStatusBar() {
     }
 }
 
-void drawMainBorder(bool clear) {
+void drawMainBorder(bool clear, bool showBorder) {
     if (clear) {
 #if !defined(HAS_EINK)
-        tft.drawPixel(0, 0, 0);
+        displayBusKeepAlive();
 #endif
         tft.fillScreen(bruceConfig.bgColor);
     }
@@ -977,7 +1058,7 @@ void drawMainBorder(bool clear) {
 
     // if(wifiConnected) {tft.print(timeStr);} else {tft.print("BRUCE 1.0b");}
 
-    drawStatusBar();
+    drawStatusBar(showBorder);
 
 #if defined(HAS_TOUCH)
     TouchFooter();
@@ -1048,9 +1129,16 @@ void drawBatteryStatus(uint8_t bat) {
     tft.setTextSize(FP);
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.drawRightString((bat == 100 ? "" : " ") + String(bat) + "%", tftWidth - 45, 12, 1);
+    tft.fillRoundRect(tftWidth - 40, 9, 30, 13, 2, bruceConfig.bgColor);
     tft.fillRoundRect(tftWidth - 40, 9, 30 * bat / 100, 13, 2, barcolor);
     tft.drawLine(tftWidth - 30, 9, tftWidth - 30, 9 + 13, bruceConfig.bgColor);
     tft.drawLine(tftWidth - 20, 9, tftWidth - 20, 9 + 13, bruceConfig.bgColor);
+    if (charging) {
+        const int boltX = tftWidth - 28;
+        const int boltY = 9;
+        tft.fillTriangle(boltX, boltY, boltX + 6, boltY, boltX + 2, boltY + 5, color);
+        tft.fillTriangle(boltX + 2, boltY + 5, boltX + 8, boltY + 5, boltX + 3, boltY + 11, color);
+    }
 }
 /***************************************************************************************
 ** Function name: drawWireguardStatus()
@@ -1480,7 +1568,7 @@ void Gif::GIFDraw(GIFDRAW *pDraw) {
             } // while looking for opaque pixels
             if (iCount) { // any opaque pixels?
 #if !defined(HAS_EINK)
-                tft.drawPixel(0, 0, 0);
+                displayBusKeepAlive();
 #endif
                 tft.pushImage(pDraw->iX + x + position->x, y + position->y, iCount, 1, (uint16_t *)usTemp);
                 x += iCount;
@@ -1503,7 +1591,7 @@ void Gif::GIFDraw(GIFDRAW *pDraw) {
         // Translate the 8-bit pixels through the RGB565 palette (already byte reversed)
         for (x = 0; x < iWidth; x++) usTemp[x] = usPalette[*s++];
 #if !defined(HAS_EINK)
-        tft.drawPixel(0, 0, 0);
+        displayBusKeepAlive();
 #endif
         tft.pushImage(pDraw->iX + position->x, y + position->y, iWidth, 1, (uint16_t *)usTemp);
     }
@@ -1849,8 +1937,8 @@ int PNGDraw(PNGDRAW *pDraw) {
     png->getLineAsRGB565(pDraw, usPixels, PNG_RGB565_BIG_ENDIAN, b << 16 | g << 8 | r);
     if (!pngCacheOnly) {
 #if !defined(HAS_EINK)
-        tft.drawPixel(0, 0, 0);
-        tft.drawPixel(0, 0, 0);
+        displayBusKeepAlive();
+        displayBusKeepAlive();
 #endif
         tft.pushImage(xpos, ypos + pDraw->y, pDraw->iWidth, 1, usPixels);
     }

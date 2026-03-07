@@ -53,21 +53,21 @@ bool setupSdCard() {
         if (!SD.begin((int8_t)bruceConfigPins.SDCARD_bus.cs)) result = false;
         // Serial.println("Task not activated");
     }
-    // SDCard in the same Bus as TFT, in this case we call the SPI TFT Instance
+    // SDCard on the same bus as the display, so reuse the display SPI instance.
     else if (bruceConfigPins.SDCARD_bus.mosi == (gpio_num_t)TFT_MOSI &&
              bruceConfigPins.SDCARD_bus.mosi != GPIO_NUM_NC) {
-        Serial.println("SDCard in the same Bus as TFT, using TFT SPI instance");
+        Serial.println("SDCard shares display bus, using display SPI instance");
 #if TFT_MOSI > 0 // condition for Headless and 8bit displays (no SPI bus)
         if (!SD.begin(bruceConfigPins.SDCARD_bus.cs, tft.getSPIinstance())) {
             result = false;
-            Serial.println("SDCard in the same Bus as TFT, but failed to mount");
+            Serial.println("SDCard shares display bus, but failed to mount");
         }
 #else
         goto NEXT; // destination for Headless and 8bit displays (no SPI bus)
 #endif
 
     }
-    // If not using TFT Bus, use a specific bus
+    // If not using display bus, use a dedicated SPI bus.
     else {
     NEXT:
         sdcardSPI.begin(
@@ -563,7 +563,7 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
     int maxFiles = 0;
     String Folder = rootPath;
     String PreFolder = rootPath;
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
     tft.fillScreen(bruceConfig.bgColor); // TODO: Does only the T-Embed CC1101 need this?
     tft.drawRoundRect(5, 5, tftWidth - 10, tftHeight - 10, 5, bruceConfig.priColor);
     if (&fs == &SD) {

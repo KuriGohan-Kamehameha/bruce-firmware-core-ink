@@ -89,7 +89,7 @@ SPIClass *selectLoraSPIBus() {
 #if TFT_MOSI > 0
         selectedSPI = &tft.getSPIinstance();
 #endif
-        Serial.println("Using TFT SPI for LoRa");
+        Serial.println("Using display SPI for LoRa");
     } else if (bruceConfigPins.SDCARD_bus.mosi == bruceConfigPins.LoRa_bus.mosi) {
         selectedSPI = &sdcardSPI;
         Serial.println("Using SDCard SPI for LoRa");

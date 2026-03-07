@@ -61,10 +61,17 @@ private:
     bool _logging = false;
 #if defined(HAS_EINK)
     bool einkDirty = false;
+    bool einkAutoFlushEnabled = true;
+    bool einkDirtyRectValid = false;
+    int32_t einkDirtyX1 = 0;
+    int32_t einkDirtyY1 = 0;
+    int32_t einkDirtyX2 = 0;
+    int32_t einkDirtyY2 = 0;
     uint32_t lastEinkFlushMs = 0;
     uint32_t lastEinkFullFlushMs = 0;
     bool einkForceFull = false;
     uint32_t einkFlushesSinceFull = 0;
+    static constexpr uint32_t EINK_AUTO_FLUSH_INTERVAL_MS = 300;
 #endif
     void clearLog();
     bool async_serial = false;
@@ -95,6 +102,7 @@ private:
     String sanitizeText(const String &s) const;
 
     void markDirty();
+    void markDirtyRect(int32_t x, int32_t y, int32_t w, int32_t h);
     static uint16_t mapColor(uint32_t color);
 
 public:
@@ -122,6 +130,8 @@ public:
     void imageToBin(uint8_t fs, String file, int x, int y, bool center, int Ms);
     bool flushEinkIfDirty(uint32_t minIntervalMs = 250, bool allowFullRefresh = true);
     void requestEinkFullRefresh();
+    void setEinkAutoFlushEnabled(bool enabled);
+    bool isEinkAutoFlushEnabled() const;
 
     void drawLine(int32_t x, int32_t y, int32_t x1, int32_t y1, int32_t color);
     void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t color);

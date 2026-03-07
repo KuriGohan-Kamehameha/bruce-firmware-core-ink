@@ -401,7 +401,7 @@ void karma_setup() {
 
             if (returnToMenu) goto Exit;
             redraw = false;
-            tft.drawPixel(0, 0, 0);
+            displayBusKeepAlive();
             drawMainBorderWithTitle("PROBE SNIFFER");
             tft.setTextSize(FP);
             tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
@@ -424,7 +424,7 @@ void karma_setup() {
 
         delay(5);
 
-        if (currentTime - last_time > 100) tft.drawPixel(0, 0, 0);
+        if (currentTime - last_time > 100) displayBusKeepAlive();
 
         if (currentTime - last_time > 1000) {
             last_time = currentTime;

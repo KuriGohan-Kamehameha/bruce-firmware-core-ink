@@ -1228,7 +1228,7 @@ void sniffer_setup() {
             uint32_t runtime = (millis() - start_time) / 1000;
 
             if (returnToMenu) goto Exit;
-            tft.drawPixel(0, 0, 0);
+            displayBusKeepAlive();
             drawMainBorderWithTitle("pcap sniffer", clearScreen); // Clear Screen and redraw border
             clearScreen = false;
             tft.setTextSize(FP);
@@ -1293,7 +1293,7 @@ void sniffer_setup() {
             tft.drawCentreString("Packets " + String(packet_counter), tftWidth / 2, tftHeight - 26, 1);
         }
 
-        if (currentTime - lastTime > 100) tft.drawPixel(0, 0, 0);
+        if (currentTime - lastTime > 100) displayBusKeepAlive();
 
         if ((rawCaptureEnabled() || deauthCaptureEnabled()) && currentTime - lastTime > 1000) {
             if (lockFileMutex(pdMS_TO_TICKS(50))) {

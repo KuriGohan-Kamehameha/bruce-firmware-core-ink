@@ -5,7 +5,9 @@
 void backToMenu();
 void addOptionToMainMenu();
 int getBattery() __attribute__((weak));
-void updateClockTimezone();
+void configureTorontoTimezone();
+bool restoreClockFromPersistedTime();
+bool updateClockTimezone();
 void updateTimeStr(struct tm timeInfo);
 void showDeviceInfo();
 String formatTimeDecimal(uint32_t totalMillis);

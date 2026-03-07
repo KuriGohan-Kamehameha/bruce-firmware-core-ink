@@ -1,6 +1,9 @@
 #include "utils.h"
 #include "core/wifi/wifi_common.h" //to return MAC addr
 #include "scrollableTextArea.h"
+#include <WiFiUdp.h>
+#include <cstdlib>
+#include <esp_sntp.h>
 #include <globals.h>
 
 /*********************************************************************
@@ -56,30 +59,215 @@ int getBattery() {
     return 0;
 }
 
-void updateClockTimezone() {
-    timeClient.begin();
-    timeClient.update();
+namespace {
+constexpr char kTorontoTz[] = "EST5EDT,M3.2.0/2,M11.1.0/2";
+constexpr char kNtpServerPrimary[] = "pool.ntp.org";
+constexpr char kNtpServerSecondary[] = "time.google.com";
+constexpr char kNtpServerTertiary[] = "time.cloudflare.com";
+constexpr char kPersistedEpochPath[] = "/clock_epoch.txt";
+constexpr uint32_t kNtpSyncTimeoutMs = 15000;
+constexpr uint32_t kNtpPollIntervalMs = 100;
+constexpr uint32_t kNtpUdpResponseTimeoutMs = 2500;
+constexpr time_t kMinValidEpoch = 1704067200; // 2024-01-01 00:00:00 UTC
+constexpr uint32_t kNtpUnixEpochOffset = 2208988800UL;
+constexpr uint16_t kNtpPacketSize = 48;
+volatile uint32_t gLastSntpSyncMs = 0;
 
-    timeClient.setTimeOffset(bruceConfig.tmz * 3600);
+bool isEpochValid(time_t epoch) { return epoch >= kMinValidEpoch; }
 
-    localTime = timeClient.getEpochTime() + (bruceConfig.dst ? 3600 : 0);
+bool millisReachedOrPassed(uint32_t nowMs, uint32_t referenceMs) {
+    return static_cast<int32_t>(nowMs - referenceMs) >= 0;
+}
+
+void onSntpTimeSynced(struct timeval *) { gLastSntpSyncMs = millis(); }
+
+bool waitForSntpSync(uint32_t requestedAtMs) {
+    const uint32_t timeoutAtMs = requestedAtMs + kNtpSyncTimeoutMs;
+
+    while (!millisReachedOrPassed(millis(), timeoutAtMs)) {
+        const uint32_t syncMs = gLastSntpSyncMs;
+        if (syncMs != 0 && millisReachedOrPassed(syncMs, requestedAtMs)) return true;
+
+        const sntp_sync_status_t syncStatus = sntp_get_sync_status();
+        if (syncStatus == SNTP_SYNC_STATUS_COMPLETED) return true;
+
+        delay(kNtpPollIntervalMs);
+    }
+
+    return false;
+}
+
+bool requestNtpEpochUdp(const char *server, time_t &epochOut) {
+    WiFiUDP udp;
+    if (!udp.begin(0)) return false;
+
+    uint8_t packet[kNtpPacketSize] = {};
+    packet[0] = 0b11100011;
+    packet[1] = 0;
+    packet[2] = 6;
+    packet[3] = 0xEC;
+
+    const bool sent = (udp.beginPacket(server, 123) == 1) && (udp.write(packet, sizeof(packet)) == sizeof(packet)) &&
+                      (udp.endPacket() == 1);
+    if (!sent) {
+        udp.stop();
+        return false;
+    }
+
+    const uint32_t deadline = millis() + kNtpUdpResponseTimeoutMs;
+    while (!millisReachedOrPassed(millis(), deadline)) {
+        int packetSize = udp.parsePacket();
+        if (packetSize >= static_cast<int>(kNtpPacketSize)) {
+            udp.read(packet, sizeof(packet));
+            udp.stop();
+
+            const uint32_t ntpSeconds = (static_cast<uint32_t>(packet[40]) << 24) |
+                                        (static_cast<uint32_t>(packet[41]) << 16) |
+                                        (static_cast<uint32_t>(packet[42]) << 8) | static_cast<uint32_t>(packet[43]);
+            if (ntpSeconds <= kNtpUnixEpochOffset) return false;
+
+            epochOut = static_cast<time_t>(ntpSeconds - kNtpUnixEpochOffset);
+            return isEpochValid(epochOut);
+        }
+        delay(50);
+    }
+
+    udp.stop();
+    return false;
+}
+
+bool fallbackSyncFromUdpNtp(time_t &epochOut) {
+    const char *servers[] = {kNtpServerPrimary, kNtpServerSecondary, kNtpServerTertiary};
+    for (const char *server : servers) {
+        if (requestNtpEpochUdp(server, epochOut)) return true;
+    }
+    return false;
+}
+
+void persistEpoch(time_t epoch) {
+    if (!isEpochValid(epoch)) return;
+    File file = LittleFS.open(kPersistedEpochPath, FILE_WRITE);
+    if (!file) {
+        log_w("Failed to open clock cache file for writing");
+        return;
+    }
+
+    file.printf("%lld\n", static_cast<long long>(epoch));
+    file.close();
+}
+
+bool readPersistedEpoch(time_t &epochOut) {
+    if (!LittleFS.exists(kPersistedEpochPath)) return false;
+    File file = LittleFS.open(kPersistedEpochPath, FILE_READ);
+    if (!file) return false;
+
+    String epochText = file.readStringUntil('\n');
+    file.close();
+
+    char *endPtr = nullptr;
+    long long parsed = strtoll(epochText.c_str(), &endPtr, 10);
+    if (endPtr == epochText.c_str()) return false;
+
+    const time_t epoch = static_cast<time_t>(parsed);
+    if (!isEpochValid(epoch)) return false;
+    epochOut = epoch;
+    return true;
+}
+
+void applyEpochToClocks(time_t epoch, bool storeEpoch) {
+    if (!isEpochValid(epoch)) return;
+
+    localTime = epoch;
+    struct timeval tv = {.tv_sec = epoch, .tv_usec = 0};
+    settimeofday(&tv, nullptr);
+
+    struct tm localTimeInfo = {};
+    localtime_r(&epoch, &localTimeInfo);
 
 #if defined(HAS_RTC)
-    struct tm *timeinfo = localtime(&localTime);
-    RTC_TimeTypeDef TimeStruct;
-    TimeStruct.Hours = timeinfo->tm_hour;
-    TimeStruct.Minutes = timeinfo->tm_min;
-    TimeStruct.Seconds = timeinfo->tm_sec;
-    _rtc.SetTime(&TimeStruct);
+    RTC_TimeTypeDef timeStruct = {};
+    timeStruct.Hours = localTimeInfo.tm_hour;
+    timeStruct.Minutes = localTimeInfo.tm_min;
+    timeStruct.Seconds = localTimeInfo.tm_sec;
+    _rtc.SetTime(&timeStruct);
+
+    RTC_DateTypeDef dateStruct = {};
+    dateStruct.WeekDay = localTimeInfo.tm_wday;
+    dateStruct.Month = localTimeInfo.tm_mon + 1;
+    dateStruct.Date = localTimeInfo.tm_mday;
+    dateStruct.Year = localTimeInfo.tm_year + 1900;
+    _rtc.SetDate(&dateStruct);
+
     updateTimeStr(_rtc.getTimeStruct());
 #else
-    rtc.setTime(localTime);
+    rtc.setTime(epoch);
     updateTimeStr(rtc.getTimeStruct());
-    clock_set = true;
 #endif
-    // Update Internal clock to system time
-    struct timeval tv = {.tv_sec = localTime};
-    settimeofday(&tv, nullptr);
+
+    clock_set = true;
+    if (storeEpoch) persistEpoch(epoch);
+}
+} // namespace
+
+void configureTorontoTimezone() {
+    setenv("TZ", kTorontoTz, 1);
+    tzset();
+}
+
+bool restoreClockFromPersistedTime() {
+    time_t persistedEpoch = 0;
+    if (!readPersistedEpoch(persistedEpoch)) return false;
+
+    applyEpochToClocks(persistedEpoch, false);
+    return true;
+}
+
+bool updateClockTimezone() {
+    if (WiFi.status() != WL_CONNECTED) return false;
+
+    configureTorontoTimezone();
+    sntp_set_time_sync_notification_cb(onSntpTimeSynced);
+    sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
+    sntp_set_sync_status(SNTP_SYNC_STATUS_RESET);
+
+    const uint32_t syncRequestMs = millis();
+    configTzTime(kTorontoTz, kNtpServerPrimary, kNtpServerSecondary, kNtpServerTertiary);
+
+    if (!waitForSntpSync(syncRequestMs)) {
+        if (esp_sntp_enabled()) {
+            // Some AP/router combos need an explicit restart to force a fresh SNTP query.
+            sntp_restart();
+            sntp_set_sync_status(SNTP_SYNC_STATUS_RESET);
+            if (!waitForSntpSync(millis())) {
+                log_w("SNTP timed out after restart, trying UDP fallback");
+                time_t fallbackEpoch = 0;
+                if (!fallbackSyncFromUdpNtp(fallbackEpoch)) {
+                    log_w("UDP NTP fallback failed");
+                    return false;
+                }
+                applyEpochToClocks(fallbackEpoch, true);
+                return true;
+            }
+        } else {
+            log_w("SNTP timed out, trying UDP fallback");
+            time_t fallbackEpoch = 0;
+            if (!fallbackSyncFromUdpNtp(fallbackEpoch)) {
+                log_w("UDP NTP fallback failed");
+                return false;
+            }
+            applyEpochToClocks(fallbackEpoch, true);
+            return true;
+        }
+    }
+
+    const time_t syncedEpoch = time(nullptr);
+    if (!isEpochValid(syncedEpoch)) {
+        log_w("NTP sync returned invalid epoch");
+        return false;
+    }
+
+    applyEpochToClocks(syncedEpoch, true);
+    return true;
 }
 
 void updateTimeStr(struct tm timeInfo) {
@@ -122,6 +310,9 @@ void showDeviceInfo() {
     ScrollableTextArea area = ScrollableTextArea("DEVICE INFO");
 
     area.addLine("Bruce Version: " + String(BRUCE_VERSION));
+#if defined(ARDUINO_M5STACK_COREINK)
+    area.addLine("CoreInk port by fitoori");
+#endif
     area.addLine("EEPROM size: " + String(EEPROMSIZE));
     area.addLine("");
     area.addLine("[MEMORY]");
