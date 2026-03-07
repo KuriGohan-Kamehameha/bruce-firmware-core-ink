@@ -3,7 +3,6 @@
 
 #include "config.h"
 #include "configPins.h"
-#include <NTPClient.h>
 #include <globals.h>
 
 void _setBrightness(uint8_t brightval) __attribute__((weak));
@@ -18,6 +17,7 @@ void setBrightnessMenu();
 void setEinkRefreshMenu();
 void setEinkRefreshDrawsMenu();
 void setAutoPowerOffMenu();
+void setPowerButtonShortPressMenu();
 
 void setUIColor();
 
@@ -67,6 +67,7 @@ void setClock();
 
 void runClockLoop(bool showMenuHint = false);
 void runAnalogClockLoop(bool showMenuHint = false);
+void runStopwatchLoop(bool showMenuHint = false);
 
 int gsetIrTxPin(bool set = false);
 

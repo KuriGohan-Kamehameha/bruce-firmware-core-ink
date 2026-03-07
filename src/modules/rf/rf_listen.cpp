@@ -65,6 +65,10 @@ void rf_listen() {
 
     unsigned long lastPulseTime = millis();
     bool pulseActive = false;
+#if defined(BUZZ_PIN)
+    bool buzzerAttached = false;
+    unsigned long buzzerOffAtMs = 0;
+#endif
 
     while (check(EscPress)) { delay(10); }
 
@@ -72,6 +76,13 @@ void rf_listen() {
         displayRedStripe(
             "Waiting for a pulse", getComplementaryColor2(bruceConfig.priColor), bruceConfig.priColor
         );
+#if defined(BUZZ_PIN)
+        if (buzzerOffAtMs > 0 && millis() >= buzzerOffAtMs) {
+            ledcWrite(BUZZ_PIN, 0);
+            ledcWriteTone(BUZZ_PIN, 0);
+            buzzerOffAtMs = 0;
+        }
+#endif
         if (newPulse) {
             newPulse = false;
             lastPulseTime = millis();
@@ -79,7 +90,23 @@ void rf_listen() {
             String pulseText = String("Freq: ") + String(___frequency, 2) + String(" Hz");
             displayRedStripe(pulseText, getComplementaryColor2(bruceConfig.priColor), bruceConfig.priColor);
 #if defined(BUZZ_PIN)
-            tone(BUZZ_PIN, ___frequency, pulseDuration);
+            if (bruceConfig.soundEnabled) {
+                const unsigned long durationMs = max(1UL, pulseDuration / 1000UL);
+                if (!buzzerAttached) { buzzerAttached = ledcAttach(BUZZ_PIN, static_cast<uint32_t>(___frequency), 10); }
+                if (buzzerAttached) {
+                    int volume = bruceConfig.soundVolume;
+                    if (volume < 0) volume = 0;
+                    if (volume > 100) volume = 100;
+                    uint32_t duty = 0;
+                    if (volume > 0) {
+                        const uint32_t minDuty = 1023U / 14U;
+                        duty = minDuty + ((1023U - minDuty) * static_cast<uint32_t>(volume) / 100U);
+                    }
+                    ledcWriteTone(BUZZ_PIN, static_cast<uint32_t>(___frequency));
+                    ledcWrite(BUZZ_PIN, duty);
+                    buzzerOffAtMs = millis() + durationMs;
+                }
+            }
 #elif defined(HAS_NS4168_SPKR)
             playTone(___frequency, pulseDuration, 0);
 #endif
@@ -95,4 +122,8 @@ void rf_listen() {
     }
 
     detachInterrupt(digitalPinToInterrupt(bruceConfigPins.CC1101_bus.io0));
+#if defined(BUZZ_PIN)
+    ledcWrite(BUZZ_PIN, 0);
+    ledcWriteTone(BUZZ_PIN, 0);
+#endif
 }

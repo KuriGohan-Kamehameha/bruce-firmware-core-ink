@@ -720,11 +720,62 @@ void playTone(unsigned int frequency, unsigned long duration, short waveType) {
 
 #endif
 
+#if defined(BUZZ_PIN)
+namespace {
+constexpr uint8_t BUZZER_PWM_RESOLUTION_BITS = 10;
+constexpr uint32_t BUZZER_PWM_MAX_DUTY = (1U << BUZZER_PWM_RESOLUTION_BITS) - 1U;
+constexpr uint32_t BUZZER_PWM_MAX_EFFECTIVE_DUTY = BUZZER_PWM_MAX_DUTY / 2U;
+constexpr uint32_t BUZZER_PWM_MIN_DUTY = BUZZER_PWM_MAX_EFFECTIVE_DUTY / 14U; // Keep low volumes audible.
+
+uint32_t buzzerDutyFromConfigVolume() {
+    int volume = bruceConfig.soundVolume;
+    if (volume < 0) volume = 0;
+    if (volume > 100) volume = 100;
+    if (volume == 0) return 0;
+
+    // For passive buzzers the fundamental tone is strongest near 50% duty.
+    // Driving toward 100% duty becomes near-DC and sounds like clicks.
+    uint32_t duty = BUZZER_PWM_MIN_DUTY +
+                    ((BUZZER_PWM_MAX_EFFECTIVE_DUTY - BUZZER_PWM_MIN_DUTY) * static_cast<uint32_t>(volume) / 100U);
+    if (duty > BUZZER_PWM_MAX_EFFECTIVE_DUTY) duty = BUZZER_PWM_MAX_EFFECTIVE_DUTY;
+    return duty;
+}
+
+bool ensureBuzzerPwmAttached(unsigned int frequency) {
+    static bool attached = false;
+    if (attached) return true;
+
+    // If BUZZ pin is already attached to LEDC, reuse it.
+    if (ledcWriteTone(BUZZ_PIN, frequency) > 0U) {
+        attached = true;
+        return true;
+    }
+
+    attached = ledcAttach(BUZZ_PIN, frequency, BUZZER_PWM_RESOLUTION_BITS);
+    return attached;
+}
+} // namespace
+#endif
+
 void _tone(unsigned int frequency, unsigned long duration) {
     if (!bruceConfig.soundEnabled) return;
 
 #if defined(BUZZ_PIN)
-    tone(BUZZ_PIN, frequency, duration);
+    if (frequency == 0U) {
+        ledcWrite(BUZZ_PIN, 0);
+        ledcWriteTone(BUZZ_PIN, 0);
+        return;
+    }
+
+    if (!ensureBuzzerPwmAttached(frequency)) return;
+
+    ledcWriteTone(BUZZ_PIN, frequency);
+    ledcWrite(BUZZ_PIN, buzzerDutyFromConfigVolume());
+    if (duration > 0UL) {
+        delay(duration);
+        ledcWrite(BUZZ_PIN, 0);
+        ledcWriteTone(BUZZ_PIN, 0);
+    }
 #elif defined(HAS_NS4168_SPKR)
     playTone(frequency, duration, 0);
 #endif

@@ -980,7 +980,7 @@ void beaconAttack() {
                 file = fs->open(beaconFile, FILE_READ);
                 beaconFile = file.readString();
                 beaconFile.replace("\r\n", "\n");
-                tft.drawPixel(0, 0, 0);
+                displayBusKeepAlive();
                 drawMainBorderWithTitle("WiFi: Beacon SPAM");
                 displayTextLine(txt);
             }

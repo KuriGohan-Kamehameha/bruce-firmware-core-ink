@@ -64,7 +64,7 @@ String getRssiBars(signed int rssi) {
 }
 
 void drawTime() {
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
     int32_t timeAreaH = canvas_top_h - 3;
     if (timeAreaH < 1) timeAreaH = 1;
     tft.fillRect(80, 0, display_w - 80, timeAreaH, bruceConfig.bgColor);
@@ -80,7 +80,7 @@ void drawTime() {
 }
 
 void drawFooterData(uint8_t friends_run, uint8_t friends_tot, String last_friend_name, signed int rssi) {
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
     tft.fillRect(0, canvas_bot_h + 1, display_w - 50, 10, bruceConfig.bgColor);
     tft.setTextSize(1);
     tft.setTextColor(bruceConfig.priColor);
@@ -130,7 +130,7 @@ void drawTopCanvas() {
     char buffer[32];
     sprintf(buffer, "CH %02d, HS %d", ch, num_HS);
     // draw screen
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
     tft.fillRect(0, 0, display_w, canvas_top_h, bruceConfig.bgColor);
     tft.drawString(buffer, 0, 3);
     tft.drawLine(0, canvas_top_h - 1, display_w, canvas_top_h - 1, bruceConfig.priColor);
@@ -142,7 +142,7 @@ void drawBottomCanvas() {
     tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
     tft.setTextDatum(TR_DATUM);
     // draw screen
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
     tft.fillRect(0, canvas_bot_h, display_w, 10, bruceConfig.bgColor);
     tft.drawString("NOT AI", display_w, canvas_bot_h + 5);
     tft.drawLine(0, canvas_bot_h, display_w, canvas_bot_h, bruceConfig.priColor);
@@ -154,7 +154,7 @@ void drawMood(String face, String phrase, bool broken) {
     tft.setTextSize(FG + 1);
     tft.setTextDatum(MC_DATUM);
     // draw screen
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
     int32_t moodY = canvas_top_h + 10;
     int32_t moodH = canvas_bot_h - moodY - 10;
     if (moodH < 1) moodH = 1;
@@ -168,7 +168,7 @@ void drawMood(String face, String phrase, bool broken) {
     tft.setTextDatum(BC_DATUM);
     tft.setTextSize(1);
     // draw screen
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
 #ifdef SMOOTH_FONT
     tft.drawCentreString(phrase, canvas_center_x, canvas_h - 30, SMOOTH_FONT);
 #else

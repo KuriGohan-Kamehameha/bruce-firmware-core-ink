@@ -41,6 +41,15 @@ uint32_t settingsCallback(cmd *c) {
     if (setting_name == "einkRefreshDraws") bruceConfig.setEinkRefreshDraws(setting_value.toInt());
     if (setting_name == "tmz") bruceConfig.setTmz(setting_value.toFloat());
     if (setting_name == "soundEnabled") bruceConfig.setSoundEnabled(setting_value.toInt());
+    if (setting_name == "menuBeepEnabled") bruceConfig.setMenuBeepEnabled(setting_value.toInt());
+    if (setting_name == "soundVolume") bruceConfig.setSoundVolume(setting_value.toInt());
+    if (setting_name == "startupChimeStyle") bruceConfig.setStartupChimeStyle(setting_value.toInt());
+    if (setting_name == "clockChimeStyle") bruceConfig.setClockChimeStyle(setting_value.toInt());
+    if (setting_name == "clockChimeSpeed") bruceConfig.setClockChimeSpeed(setting_value.toInt());
+    if (setting_name == "clockChimeMode") bruceConfig.setClockChimeMode(setting_value.toInt());
+    if (setting_name == "clockChimeSilentEnabled") bruceConfig.setClockChimeSilentEnabled(setting_value.toInt());
+    if (setting_name == "clockChimeSilentStartHour") bruceConfig.setClockChimeSilentStartHour(setting_value.toInt());
+    if (setting_name == "clockChimeSilentEndHour") bruceConfig.setClockChimeSilentEndHour(setting_value.toInt());
     if (setting_name == "wifiAtStartup") bruceConfig.setWifiAtStartup(setting_value.toInt());
     if (setting_name == "webUI") {
         bruceConfig.setWebUICreds(
@@ -78,6 +87,8 @@ uint32_t settingsCallback(cmd *c) {
     if (setting_name == "wigleBasicToken") bruceConfig.setWigleBasicToken(setting_value);
     if (setting_name == "devMode") bruceConfig.setDevMode(setting_value.toInt());
     if (setting_name == "rockerInverted") bruceConfig.setRockerInverted(setting_value.toInt());
+    if (setting_name == "powerButtonShortPressAction")
+        bruceConfig.setPowerButtonShortPressAction(setting_value.toInt());
     if (setting_name == "disabledMenus") bruceConfig.addDisabledMenu(setting_value);
 
     return true;
