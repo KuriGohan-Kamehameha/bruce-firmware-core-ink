@@ -27,9 +27,9 @@ static SPIClass *selectEthernetSPIBus() {
         bruceConfigPins.W5500_bus.mosi != GPIO_NUM_NC) {
 #if TFT_MOSI > 0
         selectedSPI = &tft.getSPIinstance();
-        Serial.println("Using TFT SPI for Ethernet");
+        Serial.println("Using display SPI for Ethernet");
 #else
-        Serial.println("TFT SPI unavailable, falling back to default SPI for Ethernet");
+        Serial.println("Display SPI unavailable, falling back to default SPI for Ethernet");
 #endif
     } else if (bruceConfigPins.W5500_bus.mosi == bruceConfigPins.SDCARD_bus.mosi &&
                bruceConfigPins.W5500_bus.mosi != GPIO_NUM_NC) {

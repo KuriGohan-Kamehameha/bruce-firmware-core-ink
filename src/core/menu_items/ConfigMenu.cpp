@@ -19,6 +19,43 @@ String autoPowerOffMenuLabel() {
     if (bruceConfig.autoPowerOffMinutes <= 0) return "Never";
     return String(bruceConfig.autoPowerOffMinutes) + " min";
 }
+
+String navigationSoundModeLabel() {
+    if (bruceConfig.menuBeepEnabled == NAVIGATION_SOUND_CLICKS) return "Clicks";
+    if (bruceConfig.menuBeepEnabled == NAVIGATION_SOUND_BEEPS) return "Beeps";
+    return "Off";
+}
+
+int nextNavigationSoundMode(int currentMode) {
+    if (currentMode == NAVIGATION_SOUND_OFF) return NAVIGATION_SOUND_BEEPS;
+    if (currentMode == NAVIGATION_SOUND_BEEPS) return NAVIGATION_SOUND_CLICKS;
+    return NAVIGATION_SOUND_OFF;
+}
+
+void toggleSoundEnabledFromMenu() {
+    const bool enableSound = bruceConfig.soundEnabled == 0;
+    bruceConfig.setSoundEnabled(enableSound ? 1 : 0);
+
+    if (!enableSound) {
+        if (bruceConfig.menuBeepEnabled != NAVIGATION_SOUND_OFF) {
+            bruceConfig.setMenuBeepEnabled(NAVIGATION_SOUND_OFF);
+        }
+        return;
+    }
+
+    if (bruceConfig.menuBeepEnabled == NAVIGATION_SOUND_OFF) {
+        bruceConfig.setMenuBeepEnabled(NAVIGATION_SOUND_BEEPS);
+    }
+}
+
+#if defined(ARDUINO_M5STACK_COREINK)
+String powerButtonShortPressMenuLabel() {
+    if (bruceConfig.powerButtonShortPressAction == POWER_BUTTON_SHORT_PRESS_DEEP_SLEEP_MESSAGE) {
+        return "Deep Sleep";
+    }
+    return "Refresh";
+}
+#endif
 } // namespace
 
 /*********************************************************************
@@ -42,7 +79,7 @@ void ConfigMenu::optionsMenu() {
             {"System Config", [this]() { systemMenu(); }   },
             {"Power",         [this]() { powerMenu(); }    },
         };
-#if !defined(LITE_VERSION) && (defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR))
+#if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
         localOptions.push_back({"Audio Config", [this]() { audioMenu(); }});
 #endif
 #if !defined(LITE_VERSION)
@@ -144,29 +181,29 @@ void ConfigMenu::ledMenu() {
 **  Audio configuration submenu with auto-rebuild for toggles
 **********************************************************************/
 void ConfigMenu::audioMenu() {
+    int selectedIndex = 0;
     while (true) {
         std::vector<Option> localOptions = {
-#if !defined(LITE_VERSION)
 #if defined(BUZZ_PIN) || defined(HAS_NS4168_SPKR)
-
             {String("Sound: ") + (bruceConfig.soundEnabled ? "ON" : "OFF"),
                                                              [this]() {
-                 // Toggle sound setting
-                 bruceConfig.soundEnabled = !bruceConfig.soundEnabled;
-                 bruceConfig.saveFile();
+                 toggleSoundEnabledFromMenu();
              }                                                                                                                                            },
-#if defined(HAS_NS4168_SPKR)
-            {"Sound Volume",                                                [this]() { setSoundVolume(); }},
+            {String("Nav Sound: ") + navigationSoundModeLabel(),
+             [this]() { bruceConfig.setMenuBeepEnabled(nextNavigationSoundMode(bruceConfig.menuBeepEnabled)); }},
+            {String("Sound Volume: ") + String(bruceConfig.soundVolume) + "%",
+             [this]() { setSoundVolume(); }},
+            {String("Startup Chime: ") + (bruceConfig.startupChimeStyle == 1 ? "4-tone" : "Classic"),
+             [this]() { bruceConfig.setStartupChimeStyle(bruceConfig.startupChimeStyle == 1 ? 0 : 1); }},
 #endif  // BUZZ_PIN || HAS_NS4168_SPKR
-#endif  //  HAS_NS4168_SPKR
-#endif  //  LITE_VERSION
             {"Back",                                                        []() {}                       },
         };
 
-        int selected = loopOptions(localOptions, MENU_TYPE_SUBMENU, "Audio Config");
+        int selected = loopOptions(localOptions, MENU_TYPE_SUBMENU, "Audio Config", selectedIndex);
 
         // Exit only if user pressed Back or ESC
         if (selected == -1 || selected == localOptions.size() - 1) { return; }
+        selectedIndex = selected;
         // Menu rebuilds to update toggle label
     }
 }
@@ -253,6 +290,10 @@ void ConfigMenu::advancedMenu() {
 void ConfigMenu::powerMenu() {
     while (true) {
         std::vector<Option> localOptions = {
+#if defined(ARDUINO_M5STACK_COREINK)
+            {String("PWR Btn Short: ") + powerButtonShortPressMenuLabel(),
+             [this]() { setPowerButtonShortPressMenu(); }},
+#endif
 #if defined(HAS_CONTROLLED_POWEROFF)
             {String("Auto PowerOff: ") + autoPowerOffMenuLabel(), [this]() { setAutoPowerOffMenu(); }},
 #endif

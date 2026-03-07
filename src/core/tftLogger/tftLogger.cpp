@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstddef>
 #include <esp32-hal-psram.h>
 #include <globals.h>
@@ -275,7 +276,53 @@ String tft_logger::sanitizeText(const String &s) const {
 
 void tft_logger::markDirty() {
 #if defined(HAS_EINK)
+    markDirtyRect(0, 0, width(), height());
+#endif
+}
+
+void tft_logger::markDirtyRect(int32_t x, int32_t y, int32_t w, int32_t h) {
+#if defined(HAS_EINK)
+    if (w == 0 || h == 0) return;
+
+    int32_t x1 = x;
+    int32_t y1 = y;
+    int32_t x2 = x + w;
+    int32_t y2 = y + h;
+
+    if (x2 < x1) std::swap(x1, x2);
+    if (y2 < y1) std::swap(y1, y2);
+
+    const int32_t displayW = width();
+    const int32_t displayH = height();
+    if (displayW <= 0 || displayH <= 0) return;
+
+    x1 = std::max<int32_t>(0, x1);
+    y1 = std::max<int32_t>(0, y1);
+    x2 = std::min<int32_t>(displayW, x2);
+    y2 = std::min<int32_t>(displayH, y2);
+    if (x2 <= x1 || y2 <= y1) return;
+
+    if (!einkDirtyRectValid) {
+        einkDirtyX1 = x1;
+        einkDirtyY1 = y1;
+        einkDirtyX2 = x2;
+        einkDirtyY2 = y2;
+        einkDirtyRectValid = true;
+    } else {
+        einkDirtyX1 = std::min(einkDirtyX1, x1);
+        einkDirtyY1 = std::min(einkDirtyY1, y1);
+        einkDirtyX2 = std::max(einkDirtyX2, x2);
+        einkDirtyY2 = std::max(einkDirtyY2, y2);
+    }
+
     einkDirty = true;
+    // Opportunistically flush while drawing so app loops that don't call loopOptions still update the panel.
+    if (einkAutoFlushEnabled) flushEinkIfDirty(EINK_AUTO_FLUSH_INTERVAL_MS);
+#else
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
 #endif
 }
 
@@ -340,9 +387,25 @@ bool tft_logger::flushEinkIfDirty(uint32_t minIntervalMs, bool allowFullRefresh)
         }
     }
 
+    const bool hasDirtyRect = einkDirtyRectValid;
+    const int32_t dirtyX1 = einkDirtyX1;
+    const int32_t dirtyY1 = einkDirtyY1;
+    const int32_t dirtyX2 = einkDirtyX2;
+    const int32_t dirtyY2 = einkDirtyY2;
+
     lastEinkFlushMs = now;
     einkDirty = false;
-    BRUCE_TFT_DRIVER::display(forceFull);
+    einkDirtyRectValid = false;
+
+    if (forceFull || !hasDirtyRect) {
+        BRUCE_TFT_DRIVER::display(forceFull);
+    } else {
+#if defined(USE_M5GFX)
+        BRUCE_TFT_DRIVER::displayRegion(dirtyX1, dirtyY1, dirtyX2 - dirtyX1, dirtyY2 - dirtyY1);
+#else
+        BRUCE_TFT_DRIVER::display(false);
+#endif
+    }
     if (forceFull) {
         lastEinkFullFlushMs = now;
         einkForceFull = false;
@@ -360,6 +423,24 @@ bool tft_logger::flushEinkIfDirty(uint32_t minIntervalMs, bool allowFullRefresh)
 void tft_logger::requestEinkFullRefresh() {
 #if defined(HAS_EINK)
     einkForceFull = true;
+    // Ensure a manual full-refresh request can be flushed immediately even if no draw happened.
+    einkDirty = true;
+#endif
+}
+
+void tft_logger::setEinkAutoFlushEnabled(bool enabled) {
+#if defined(HAS_EINK)
+    einkAutoFlushEnabled = enabled;
+#else
+    (void)enabled;
+#endif
+}
+
+bool tft_logger::isEinkAutoFlushEnabled() const {
+#if defined(HAS_EINK)
+    return einkAutoFlushEnabled;
+#else
+    return false;
 #endif
 }
 
@@ -379,7 +460,7 @@ void tft_logger::drawPixel(int32_t x, int32_t y, int32_t color) {
     if (logging) checkAndLog(DRAWPIXEL, x, y, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawPixel(x, y, color);
-    markDirty();
+    markDirtyRect(x, y, 1, 1);
     restoreLogger();
 }
 
@@ -452,7 +533,11 @@ void tft_logger::drawLine(int32_t x, int32_t y, int32_t x1, int32_t y1, int32_t 
     if (logging) checkAndLog(DRAWLINE, x, y, x1, y1, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawLine(x, y, x1, y1, color);
-    markDirty();
+    int32_t minX = std::min(x, x1);
+    int32_t minY = std::min(y, y1);
+    int32_t maxX = std::max(x, x1);
+    int32_t maxY = std::max(y, y1);
+    markDirtyRect(minX, minY, (maxX - minX) + 1, (maxY - minY) + 1);
     restoreLogger();
 }
 
@@ -461,7 +546,7 @@ void tft_logger::drawRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t co
     if (logging) checkAndLog(DRAWRECT, x, y, w, h, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawRect(x, y, w, h, color);
-    markDirty();
+    markDirtyRect(x, y, w, h);
     restoreLogger();
 }
 
@@ -473,7 +558,7 @@ void tft_logger::fillRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t co
     }
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::fillRect(x, y, w, h, color);
-    markDirty();
+    markDirtyRect(x, y, w, h);
     restoreLogger();
 }
 
@@ -482,7 +567,7 @@ void tft_logger::drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32
     if (logging) checkAndLog(DRAWROUNDRECT, x, y, w, h, r, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawRoundRect(x, y, w, h, r, color);
-    markDirty();
+    markDirtyRect(x, y, w, h);
     restoreLogger();
 }
 
@@ -494,7 +579,7 @@ void tft_logger::fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32
     }
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::fillRoundRect(x, y, w, h, r, color);
-    markDirty();
+    markDirtyRect(x, y, w, h);
     restoreLogger();
 }
 
@@ -503,7 +588,8 @@ void tft_logger::drawCircle(int32_t x, int32_t y, int32_t r, int32_t color) {
     if (logging) checkAndLog(DRAWCIRCLE, x, y, r, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawCircle(x, y, r, color);
-    markDirty();
+    int32_t diameter = (r * 2) + 1;
+    markDirtyRect(x - r, y - r, diameter, diameter);
     restoreLogger();
 }
 
@@ -512,7 +598,8 @@ void tft_logger::fillCircle(int32_t x, int32_t y, int32_t r, int32_t color) {
     if (logging) checkAndLog(FILLCIRCLE, x, y, r, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::fillCircle(x, y, r, color);
-    markDirty();
+    int32_t diameter = (r * 2) + 1;
+    markDirtyRect(x - r, y - r, diameter, diameter);
     restoreLogger();
 }
 
@@ -521,7 +608,7 @@ void tft_logger::drawEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint1
     if (logging) checkAndLog(DRAWELIPSE, x, y, rx, ry, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawEllipse(x, y, rx, ry, color);
-    markDirty();
+    markDirtyRect(x - rx, y - ry, (rx * 2) + 1, (ry * 2) + 1);
     restoreLogger();
 }
 
@@ -530,7 +617,7 @@ void tft_logger::fillEllipse(int16_t x, int16_t y, int32_t rx, int32_t ry, uint1
     if (logging) checkAndLog(FILLELIPSE, x, y, rx, ry, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::fillEllipse(x, y, rx, ry, color);
-    markDirty();
+    markDirtyRect(x - rx, y - ry, (rx * 2) + 1, (ry * 2) + 1);
     restoreLogger();
 }
 
@@ -541,7 +628,11 @@ void tft_logger::drawTriangle(
     if (logging) checkAndLog(DRAWTRIAGLE, x1, y1, x2, y2, x3, y3, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawTriangle(x1, y1, x2, y2, x3, y3, color);
-    markDirty();
+    int32_t minX = std::min(x1, std::min(x2, x3));
+    int32_t minY = std::min(y1, std::min(y2, y3));
+    int32_t maxX = std::max(x1, std::max(x2, x3));
+    int32_t maxY = std::max(y1, std::max(y2, y3));
+    markDirtyRect(minX, minY, (maxX - minX) + 1, (maxY - minY) + 1);
     restoreLogger();
 }
 
@@ -552,7 +643,11 @@ void tft_logger::fillTriangle(
     if (logging) checkAndLog(FILLTRIANGLE, x1, y1, x2, y2, x3, y3, color);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::fillTriangle(x1, y1, x2, y2, x3, y3, color);
-    markDirty();
+    int32_t minX = std::min(x1, std::min(x2, x3));
+    int32_t minY = std::min(y1, std::min(y2, y3));
+    int32_t maxX = std::max(x1, std::max(x2, x3));
+    int32_t maxY = std::max(y1, std::max(y2, y3));
+    markDirtyRect(minX, minY, (maxX - minX) + 1, (maxY - minY) + 1);
     restoreLogger();
 }
 void tft_logger::drawArc(
@@ -567,7 +662,8 @@ void tft_logger::drawArc(
         );
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawArc(x, y, r, ir, startAngle, endAngle, fg_color, bg_color, smoothArc);
-    markDirty();
+    int32_t diameter = (r * 2) + 1;
+    markDirtyRect(x - r, y - r, diameter, diameter);
     restoreLogger();
 }
 
@@ -580,7 +676,12 @@ void tft_logger::drawWideLine(float ax, float ay, float bx, float by, float wd, 
         );
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawWideLine(ax, ay, bx, by, wd, fg, bg);
-    markDirty();
+    int32_t halfWidth = static_cast<int32_t>(wd * 0.5f) + 2;
+    int32_t minX = static_cast<int32_t>(std::min(ax, bx)) - halfWidth;
+    int32_t minY = static_cast<int32_t>(std::min(ay, by)) - halfWidth;
+    int32_t maxX = static_cast<int32_t>(std::max(ax, bx)) + halfWidth;
+    int32_t maxY = static_cast<int32_t>(std::max(ay, by)) + halfWidth;
+    markDirtyRect(minX, minY, (maxX - minX) + 1, (maxY - minY) + 1);
     restoreLogger();
 }
 
@@ -589,7 +690,7 @@ void tft_logger::drawFastVLine(int32_t x, int32_t y, int32_t h, int32_t fg) {
     if (logging) checkAndLog(DRAWFASTVLINE, x, y, h, fg);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawFastVLine(x, y, h, fg);
-    markDirty();
+    markDirtyRect(x, y, 1, h);
     restoreLogger();
 }
 
@@ -598,7 +699,7 @@ void tft_logger::drawFastHLine(int32_t x, int32_t y, int32_t w, int32_t fg) {
     if (logging) checkAndLog(DRAWFASTHLINE, x, y, w, fg);
     if (isSleeping) return;
     BRUCE_TFT_DRIVER::drawFastHLine(x, y, w, fg);
-    markDirty();
+    markDirtyRect(x, y, w, 1);
     restoreLogger();
 }
 
@@ -643,7 +744,10 @@ int16_t tft_logger::drawString(const String &string, int32_t x, int32_t y, uint8
     int16_t r;
     if (isSleeping) return string.length();
     r = BRUCE_TFT_DRIVER::drawString(clean, x, y, font);
-    markDirty();
+    int32_t textWidthPx = std::max<int32_t>(1, r);
+    int32_t textHeightPx = std::max<int32_t>(1, BRUCE_TFT_DRIVER::fontHeight(font));
+    // DrawString can honor different datum settings; expand around anchor to cover all cases.
+    markDirtyRect(x - textWidthPx, y - textHeightPx, (textWidthPx * 2) + 2, (textHeightPx * 2) + 2);
     restoreLogger();
     return r;
 }
@@ -654,7 +758,9 @@ int16_t tft_logger::drawCentreString(const String &string, int32_t x, int32_t y,
     int16_t r;
     if (isSleeping) return string.length();
     r = BRUCE_TFT_DRIVER::drawCentreString(clean, x, y, font);
-    markDirty();
+    int32_t textWidthPx = std::max<int32_t>(1, r);
+    int32_t textHeightPx = std::max<int32_t>(1, BRUCE_TFT_DRIVER::fontHeight(font));
+    markDirtyRect(x - textWidthPx, y - textHeightPx, (textWidthPx * 2) + 2, (textHeightPx * 2) + 2);
     restoreLogger();
     return r;
 }
@@ -665,7 +771,9 @@ int16_t tft_logger::drawRightString(const String &string, int32_t x, int32_t y, 
     int16_t r;
     if (isSleeping) return string.length();
     r = BRUCE_TFT_DRIVER::drawRightString(clean, x, y, font);
-    markDirty();
+    int32_t textWidthPx = std::max<int32_t>(1, r);
+    int32_t textHeightPx = std::max<int32_t>(1, BRUCE_TFT_DRIVER::fontHeight(font));
+    markDirtyRect(x - textWidthPx, y - textHeightPx, (textWidthPx * 2) + 2, (textHeightPx * 2) + 2);
     restoreLogger();
     return r;
 }
@@ -719,8 +827,23 @@ size_t tft_logger::print(const String &s) {
         log_print(chunk);
         if (isSleeping) totalPrinted += chunk.length();
         else {
+            const int32_t startX = BRUCE_TFT_DRIVER::getCursorX();
+            const int32_t startY = BRUCE_TFT_DRIVER::getCursorY();
             totalPrinted += BRUCE_TFT_DRIVER::print(chunk);
-            markDirty();
+            const int32_t endX = BRUCE_TFT_DRIVER::getCursorX();
+            const int32_t endY = BRUCE_TFT_DRIVER::getCursorY();
+            const int32_t textHeightPx = std::max<int32_t>(1, BRUCE_TFT_DRIVER::fontHeight());
+            bool multiline = (chunk.indexOf('\n') >= 0) || (chunk.indexOf('\r') >= 0) || (endY != startY);
+            if (multiline) {
+                int32_t topY = std::min(startY, endY) - 1;
+                int32_t bottomY = std::max(startY, endY) + textHeightPx + 1;
+                markDirtyRect(0, topY, width(), bottomY - topY);
+            } else {
+                int32_t leftX = std::min(startX, endX) - 1;
+                int32_t rightX = std::max(startX, endX) + 1;
+                if (rightX <= leftX) rightX = leftX + (chunk.length() * LW * currentTextSize()) + 2;
+                markDirtyRect(leftX, startY - 1, rightX - leftX, textHeightPx + 2);
+            }
         }
 
         offset += chunkSize;

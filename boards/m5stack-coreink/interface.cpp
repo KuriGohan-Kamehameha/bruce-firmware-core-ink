@@ -4,6 +4,7 @@
 #include "modules/others/audio.h"
 #endif
 #include <M5Unified.h>
+#include <Wire.h>
 #include <globals.h>
 #include <interface.h>
 
@@ -18,9 +19,12 @@ constexpr uint8_t CHARGING_LED_ON = 48;
 constexpr uint32_t INPUT_LED_PULSE_MS = 35;
 constexpr uint32_t POWER_EVENT_LED_PULSE_MS = 180;
 constexpr uint32_t POWER_STATE_POLL_MS = 250;
-constexpr uint16_t POWER_CONNECTED_TONE_HZ = 3200;
-constexpr uint16_t POWER_DISCONNECTED_TONE_HZ = 2200;
-constexpr uint16_t POWER_EVENT_TONE_MS = 100;
+constexpr uint16_t POWER_CONNECTED_TONE_LOW_HZ = 2600;
+constexpr uint16_t POWER_CONNECTED_TONE_HIGH_HZ = 3600;
+constexpr uint16_t POWER_DISCONNECTED_TONE_HIGH_HZ = 3200;
+constexpr uint16_t POWER_DISCONNECTED_TONE_LOW_HZ = 1900;
+constexpr uint16_t POWER_EVENT_TONE_SHORT_MS = 45;
+constexpr uint16_t POWER_EVENT_TONE_LONG_MS = 70;
 
 uint32_t g_inputLedPulseUntilMs = 0;
 uint32_t g_lastPowerSampleMs = 0;
@@ -59,6 +63,18 @@ void triggerInputLedPulse() {
     triggerLedPulse(INPUT_LED_PULSE_MS, INPUT_LED_ON);
 }
 
+void handlePowerButtonShortPressAction() {
+    if (bruceConfig.powerButtonShortPressAction == POWER_BUTTON_SHORT_PRESS_DEEP_SLEEP_MESSAGE) {
+        displayInfo("Entering deep sleep");
+        delay(120);
+        goToDeepSleep();
+        return;
+    }
+
+    einkRequestFullRefresh();
+    einkFlushIfDirty(0);
+}
+
 bool isExternalPowerPresent() {
     if (M5.Power.getType() == m5::Power_Class::pmic_t::pmic_axp192) {
         return M5.Power.Axp192.isACIN() || M5.Power.Axp192.isVBUS();
@@ -81,9 +97,11 @@ void playPowerTransitionTone(bool powerConnected) {
     }
 
     if (powerConnected) {
-        _tone(POWER_CONNECTED_TONE_HZ, POWER_EVENT_TONE_MS);
+        _tone(POWER_CONNECTED_TONE_LOW_HZ, POWER_EVENT_TONE_SHORT_MS);
+        _tone(POWER_CONNECTED_TONE_HIGH_HZ, POWER_EVENT_TONE_LONG_MS);
     } else {
-        _tone(POWER_DISCONNECTED_TONE_HZ, POWER_EVENT_TONE_MS);
+        _tone(POWER_DISCONNECTED_TONE_HIGH_HZ, POWER_EVENT_TONE_SHORT_MS);
+        _tone(POWER_DISCONNECTED_TONE_LOW_HZ, POWER_EVENT_TONE_LONG_MS);
     }
 #else
     (void)powerConnected;
@@ -128,6 +146,9 @@ void servicePowerIndicators() {
 ***************************************************************************************/
 void _setup_gpio() {
     M5.begin();
+#if defined(HAS_RTC)
+    _rtc.setWire(&Wire);
+#endif
     pinMode(ROCKER_LEFT_PIN, INPUT_PULLUP);
     pinMode(ROCKER_CENTER_PIN, INPUT_PULLUP);
     pinMode(ROCKER_RIGHT_PIN, INPUT_PULLUP);
@@ -170,7 +191,8 @@ void InputHandler(void) {
     servicePowerIndicators();
     if (millis() - tm < 200 && !LongPress) return;
 
-    // Rocker button: left/right = next/prev, center = select/back (hold), G5 = back
+    // Rocker button: left/right = next/prev, center = select/back (hold), G5 = back.
+    // PWR short click behavior is configurable via settings.
     static bool lastLeft = false;
     static bool lastRight = false;
     static bool lastCenter = false;
@@ -183,7 +205,8 @@ void InputHandler(void) {
     bool leftPressed = leftNow && !lastLeft;
     bool rightPressed = rightNow && !lastRight;
     bool centerPressed = centerNow && !lastCenter;
-    bool auxPressed = M5.BtnEXT.wasPressed(); // G5 top button
+    bool auxPressed = M5.BtnEXT.wasPressed();       // G5 top button
+    bool pwrShortPressed = M5.BtnPWR.wasClicked();  // PMIC power button short click
 
     // Track center button hold time for long press detection
     if (centerNow && !lastCenter) { centerPressTime = millis(); }
@@ -196,6 +219,13 @@ void InputHandler(void) {
     if (centerPressed) {
         leftPressed = false;
         rightPressed = false;
+    }
+
+    if (pwrShortPressed) {
+        tm = millis();
+        triggerInputLedPulse();
+        handlePowerButtonShortPressAction();
+        return;
     }
 
     bool any = leftPressed || rightPressed || centerPressed || auxPressed;

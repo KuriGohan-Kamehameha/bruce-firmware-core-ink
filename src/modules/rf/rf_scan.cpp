@@ -91,7 +91,7 @@ bool RFScan::fast_scan() {
     }
     float checkFrequency = subghz_frequency_list[idx];
     setMHZ(checkFrequency);
-    tft.drawPixel(0, 0, 0); // To make sure CC1101 shared with TFT works properly
+    displayBusKeepAlive(); // To make sure CC1101 shared with TFT works properly
     vTaskDelay(5 / portTICK_PERIOD_MS);
     rssi = ELECHOUSE_cc1101.getRssi();
     if (rssi > rssiThreshold) {
@@ -443,7 +443,7 @@ void display_signal_data(RfCodes received) {
 
     // if (bruceConfigPins.rfModule == CC1101_SPI_MODULE) {
     //     int rssi = ELECHOUSE_cc1101.getRssi();
-    //     tft.drawPixel(0, 0, 0);
+    //     displayBusKeepAlive();
     //     padprintln("Rssi: " + String(rssi));
     // }
 

@@ -91,6 +91,7 @@ public:
     void writecommand(uint8_t c);
 
     void display(bool forceFull = false);
+    void displayRegion(int32_t x, int32_t y, int32_t w, int32_t h);
     void setAutoDisplay(bool enabled);
 
     uint32_t getTextColor() const;

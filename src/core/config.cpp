@@ -21,8 +21,36 @@ JsonDocument BruceConfig::toJson() const {
     setting["tmz"] = tmz;
     setting["dst"] = dst;
     setting["clock24hr"] = clock24hr;
+    setting["analogClockFaceStyle"] = analogClockFaceStyle;
+    setting["analogClockHandStyle"] = analogClockHandStyle;
+    setting["analogClockShowSecondHand"] = analogClockShowSecondHand;
+    setting["analogClockShowSecondTail"] = analogClockShowSecondTail;
+    setting["analogClockShowDigitalTime"] = analogClockShowDigitalTime;
+    setting["analogClockDigitalShowSeconds"] = analogClockDigitalShowSeconds;
+    setting["analogClockShowDate"] = analogClockShowDate;
+    setting["analogClockShowWeekday"] = analogClockShowWeekday;
+    setting["analogClockShowBattery"] = analogClockShowBattery;
+    setting["analogClockShowWifi"] = analogClockShowWifi;
+    setting["analogClockShowBle"] = analogClockShowBle;
+    setting["analogClockShowCharging"] = analogClockShowCharging;
+    setting["analogClockShowMinuteTicks"] = analogClockShowMinuteTicks;
+    setting["analogClockSmoothSecondHand"] = analogClockSmoothSecondHand;
+    setting["analogClockFaceInverted"] = analogClockFaceInverted;
     setting["soundEnabled"] = soundEnabled;
+    setting["menuBeepEnabled"] = menuBeepEnabled;
     setting["soundVolume"] = soundVolume;
+    setting["startupChimeStyle"] = startupChimeStyle;
+    setting["clockChimeStyle"] = clockChimeStyle;
+    setting["clockChimeSpeed"] = clockChimeSpeed;
+    setting["clockChimeMode"] = clockChimeMode;
+    setting["clockChimeSilentEnabled"] = clockChimeSilentEnabled;
+    setting["clockChimeSilentStartHour"] = clockChimeSilentStartHour;
+    setting["clockChimeSilentEndHour"] = clockChimeSilentEndHour;
+    setting["clockAlarmEnabled"] = clockAlarmEnabled;
+    setting["clockAlarmHour"] = clockAlarmHour;
+    setting["clockAlarmMinute"] = clockAlarmMinute;
+    setting["clockAlarmTone"] = clockAlarmTone;
+    setting["timerAlertTone"] = timerAlertTone;
     setting["wifiAtStartup"] = wifiAtStartup;
     setting["instantBoot"] = instantBoot;
 
@@ -67,6 +95,7 @@ JsonDocument BruceConfig::toJson() const {
     setting["devMode"] = devMode;
     setting["colorInverted"] = colorInverted;
     setting["rockerInverted"] = rockerInverted;
+    setting["powerButtonShortPressAction"] = powerButtonShortPressAction;
 
     setting["badUSBBLEKeyboardLayout"] = badUSBBLEKeyboardLayout;
     setting["badUSBBLEKeyDelay"] = badUSBBLEKeyDelay;
@@ -206,14 +235,182 @@ void BruceConfig::fromFile(bool checkFS) {
         count++;
         log_e("Fail");
     }
+    if (!setting["analogClockFaceStyle"].isNull()) {
+        analogClockFaceStyle = setting["analogClockFaceStyle"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockHandStyle"].isNull()) {
+        analogClockHandStyle = setting["analogClockHandStyle"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowSecondHand"].isNull()) {
+        analogClockShowSecondHand = setting["analogClockShowSecondHand"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowSecondTail"].isNull()) {
+        analogClockShowSecondTail = setting["analogClockShowSecondTail"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowDigitalTime"].isNull()) {
+        analogClockShowDigitalTime = setting["analogClockShowDigitalTime"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockDigitalShowSeconds"].isNull()) {
+        analogClockDigitalShowSeconds = setting["analogClockDigitalShowSeconds"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowDate"].isNull()) {
+        analogClockShowDate = setting["analogClockShowDate"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowWeekday"].isNull()) {
+        analogClockShowWeekday = setting["analogClockShowWeekday"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowBattery"].isNull()) {
+        analogClockShowBattery = setting["analogClockShowBattery"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowWifi"].isNull()) {
+        analogClockShowWifi = setting["analogClockShowWifi"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowBle"].isNull()) {
+        analogClockShowBle = setting["analogClockShowBle"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowCharging"].isNull()) {
+        analogClockShowCharging = setting["analogClockShowCharging"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockShowMinuteTicks"].isNull()) {
+        analogClockShowMinuteTicks = setting["analogClockShowMinuteTicks"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockSmoothSecondHand"].isNull()) {
+        analogClockSmoothSecondHand = setting["analogClockSmoothSecondHand"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["analogClockFaceInverted"].isNull()) {
+        analogClockFaceInverted = setting["analogClockFaceInverted"].as<bool>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
     if (!setting["soundEnabled"].isNull()) {
         soundEnabled = setting["soundEnabled"].as<int>();
     } else {
         count++;
         log_e("Fail");
     }
+    if (!setting["menuBeepEnabled"].isNull()) {
+        menuBeepEnabled = setting["menuBeepEnabled"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
     if (!setting["soundVolume"].isNull()) {
         soundVolume = setting["soundVolume"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["startupChimeStyle"].isNull()) {
+        startupChimeStyle = setting["startupChimeStyle"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockChimeStyle"].isNull()) {
+        clockChimeStyle = setting["clockChimeStyle"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockChimeSpeed"].isNull()) {
+        clockChimeSpeed = setting["clockChimeSpeed"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockChimeMode"].isNull()) {
+        clockChimeMode = setting["clockChimeMode"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockChimeSilentEnabled"].isNull()) {
+        clockChimeSilentEnabled = setting["clockChimeSilentEnabled"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockChimeSilentStartHour"].isNull()) {
+        clockChimeSilentStartHour = setting["clockChimeSilentStartHour"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockChimeSilentEndHour"].isNull()) {
+        clockChimeSilentEndHour = setting["clockChimeSilentEndHour"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockAlarmEnabled"].isNull()) {
+        clockAlarmEnabled = setting["clockAlarmEnabled"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockAlarmHour"].isNull()) {
+        clockAlarmHour = setting["clockAlarmHour"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockAlarmMinute"].isNull()) {
+        clockAlarmMinute = setting["clockAlarmMinute"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["clockAlarmTone"].isNull()) {
+        clockAlarmTone = setting["clockAlarmTone"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["timerAlertTone"].isNull()) {
+        timerAlertTone = setting["timerAlertTone"].as<int>();
     } else {
         count++;
         log_e("Fail");
@@ -387,6 +584,12 @@ void BruceConfig::fromFile(bool checkFS) {
         count++;
         log_e("Fail");
     }
+    if (!setting["powerButtonShortPressAction"].isNull()) {
+        powerButtonShortPressAction = setting["powerButtonShortPressAction"].as<int>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
 
     if (!setting["badUSBBLEKeyboardLayout"].isNull()) {
         badUSBBLEKeyboardLayout = setting["badUSBBLEKeyboardLayout"].as<int>();
@@ -476,8 +679,23 @@ void BruceConfig::validateConfig() {
     validateEinkRefreshMs();
     validateEinkRefreshDraws();
     validateTmzValue();
+    validateAnalogClockFaceStyle();
+    validateAnalogClockHandStyle();
     validateSoundEnabledValue();
+    validateMenuBeepEnabledValue();
     validateSoundVolumeValue();
+    validateStartupChimeStyle();
+    validateClockChimeStyle();
+    validateClockChimeSpeed();
+    validateClockChimeMode();
+    validateClockChimeSilentEnabled();
+    validateClockChimeSilentStartHour();
+    validateClockChimeSilentEndHour();
+    validateClockAlarmEnabled();
+    validateClockAlarmHour();
+    validateClockAlarmMinute();
+    validateClockAlarmTone();
+    validateTimerAlertTone();
     validateWifiAtStartupValue();
 #ifdef HAS_RGB_LED
     validateLedBrightValue();
@@ -491,6 +709,7 @@ void BruceConfig::validateConfig() {
     validateDevModeValue();
     validateColorInverted();
     validateRockerInvertedValue();
+    validatePowerButtonShortPressAction();
     validateBadUSBBLEKeyboardLayout();
     validateBadUSBBLEKeyDelay();
     validateEvilEndpointCreds();
@@ -578,7 +797,7 @@ void BruceConfig::setTmz(float value) {
 }
 
 void BruceConfig::validateTmzValue() {
-    if (tmz < -12 || tmz > 14) tmz = 0;
+    if (tmz < -12 || tmz > 14) tmz = -5;
 }
 
 void BruceConfig::setDST(bool value) {
@@ -591,9 +810,100 @@ void BruceConfig::setClock24Hr(bool value) {
     saveFile();
 }
 
+void BruceConfig::setAnalogClockFaceStyle(int value) {
+    analogClockFaceStyle = value;
+    validateAnalogClockFaceStyle();
+    saveFile();
+}
+
+void BruceConfig::validateAnalogClockFaceStyle() {
+    if (analogClockFaceStyle < 0 || analogClockFaceStyle > 4) analogClockFaceStyle = 1;
+}
+
+void BruceConfig::setAnalogClockHandStyle(int value) {
+    analogClockHandStyle = value;
+    validateAnalogClockHandStyle();
+    saveFile();
+}
+
+void BruceConfig::validateAnalogClockHandStyle() {
+    if (analogClockHandStyle < 0 || analogClockHandStyle > 2) analogClockHandStyle = 0;
+}
+
+void BruceConfig::setAnalogClockShowSecondHand(bool value) {
+    analogClockShowSecondHand = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockShowSecondTail(bool value) {
+    analogClockShowSecondTail = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockShowDigitalTime(bool value) {
+    analogClockShowDigitalTime = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockDigitalShowSeconds(bool value) {
+    analogClockDigitalShowSeconds = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockShowDate(bool value) {
+    analogClockShowDate = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockShowWeekday(bool value) {
+    analogClockShowWeekday = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockShowBattery(bool value) {
+    analogClockShowBattery = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockShowWifi(bool value) {
+    analogClockShowWifi = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockShowBle(bool value) {
+    analogClockShowBle = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockShowCharging(bool value) {
+    analogClockShowCharging = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockShowMinuteTicks(bool value) {
+    analogClockShowMinuteTicks = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockSmoothSecondHand(bool value) {
+    analogClockSmoothSecondHand = value;
+    saveFile();
+}
+
+void BruceConfig::setAnalogClockFaceInverted(bool value) {
+    analogClockFaceInverted = value;
+    saveFile();
+}
+
 void BruceConfig::setSoundEnabled(int value) {
     soundEnabled = value;
     validateSoundEnabledValue();
+    saveFile();
+}
+
+void BruceConfig::setMenuBeepEnabled(int value) {
+    menuBeepEnabled = value;
+    validateMenuBeepEnabledValue();
     saveFile();
 }
 
@@ -603,12 +913,151 @@ void BruceConfig::setSoundVolume(int value) {
     saveFile();
 }
 
+void BruceConfig::setStartupChimeStyle(int value) {
+    startupChimeStyle = value;
+    validateStartupChimeStyle();
+    saveFile();
+}
+
+void BruceConfig::setClockChimeStyle(int value) {
+    clockChimeStyle = value;
+    validateClockChimeStyle();
+    saveFile();
+}
+
+void BruceConfig::setClockChimeSpeed(int value) {
+    clockChimeSpeed = value;
+    validateClockChimeSpeed();
+    saveFile();
+}
+
+void BruceConfig::setClockChimeMode(int value) {
+    clockChimeMode = value;
+    validateClockChimeMode();
+    saveFile();
+}
+
+void BruceConfig::setClockChimeSilentEnabled(int value) {
+    clockChimeSilentEnabled = value;
+    validateClockChimeSilentEnabled();
+    saveFile();
+}
+
+void BruceConfig::setClockChimeSilentStartHour(int value) {
+    clockChimeSilentStartHour = value;
+    validateClockChimeSilentStartHour();
+    saveFile();
+}
+
+void BruceConfig::setClockChimeSilentEndHour(int value) {
+    clockChimeSilentEndHour = value;
+    validateClockChimeSilentEndHour();
+    saveFile();
+}
+
+void BruceConfig::setClockAlarmEnabled(int value) {
+    clockAlarmEnabled = value;
+    validateClockAlarmEnabled();
+    saveFile();
+}
+
+void BruceConfig::setClockAlarmHour(int value) {
+    clockAlarmHour = value;
+    validateClockAlarmHour();
+    saveFile();
+}
+
+void BruceConfig::setClockAlarmMinute(int value) {
+    clockAlarmMinute = value;
+    validateClockAlarmMinute();
+    saveFile();
+}
+
+void BruceConfig::setClockAlarmTone(int value) {
+    clockAlarmTone = value;
+    validateClockAlarmTone();
+    saveFile();
+}
+
+void BruceConfig::setTimerAlertTone(int value) {
+    timerAlertTone = value;
+    validateTimerAlertTone();
+    saveFile();
+}
+
 void BruceConfig::validateSoundEnabledValue() {
+    if (soundEnabled < 0) soundEnabled = 0;
     if (soundEnabled > 1) soundEnabled = 1;
 }
 
+void BruceConfig::validateMenuBeepEnabledValue() {
+    if (menuBeepEnabled < NAVIGATION_SOUND_OFF) menuBeepEnabled = NAVIGATION_SOUND_OFF;
+    if (menuBeepEnabled > NAVIGATION_SOUND_CLICKS) menuBeepEnabled = NAVIGATION_SOUND_BEEPS;
+}
+
 void BruceConfig::validateSoundVolumeValue() {
+    if (soundVolume < 0) soundVolume = 0;
     if (soundVolume > 100) soundVolume = 100;
+}
+
+void BruceConfig::validateStartupChimeStyle() {
+    if (startupChimeStyle < 0) startupChimeStyle = 0;
+    if (startupChimeStyle > 1) startupChimeStyle = 1;
+}
+
+void BruceConfig::validateClockChimeStyle() {
+    if (clockChimeStyle < 0) clockChimeStyle = 0;
+    if (clockChimeStyle > 1) clockChimeStyle = 1;
+}
+
+void BruceConfig::validateClockChimeSpeed() {
+    if (clockChimeSpeed < 1) clockChimeSpeed = 1;
+    if (clockChimeSpeed > 5) clockChimeSpeed = 5;
+}
+
+void BruceConfig::validateClockChimeMode() {
+    if (clockChimeMode < CLOCK_CHIME_MODE_HOUR) clockChimeMode = CLOCK_CHIME_MODE_HOUR;
+    if (clockChimeMode > CLOCK_CHIME_MODE_FULL) clockChimeMode = CLOCK_CHIME_MODE_FULL;
+}
+
+void BruceConfig::validateClockChimeSilentEnabled() {
+    if (clockChimeSilentEnabled < 0) clockChimeSilentEnabled = 0;
+    if (clockChimeSilentEnabled > 1) clockChimeSilentEnabled = 1;
+}
+
+void BruceConfig::validateClockChimeSilentStartHour() {
+    if (clockChimeSilentStartHour < 0) clockChimeSilentStartHour = 0;
+    if (clockChimeSilentStartHour > 23) clockChimeSilentStartHour = 23;
+}
+
+void BruceConfig::validateClockChimeSilentEndHour() {
+    if (clockChimeSilentEndHour < 0) clockChimeSilentEndHour = 0;
+    if (clockChimeSilentEndHour > 23) clockChimeSilentEndHour = 23;
+}
+
+void BruceConfig::validateClockAlarmEnabled() {
+    if (clockAlarmEnabled < 0) clockAlarmEnabled = 0;
+    if (clockAlarmEnabled > 1) clockAlarmEnabled = 1;
+}
+
+void BruceConfig::validateClockAlarmHour() {
+    if (clockAlarmHour < 0) clockAlarmHour = 0;
+    if (clockAlarmHour > 23) clockAlarmHour = 23;
+}
+
+void BruceConfig::validateClockAlarmMinute() {
+    if (clockAlarmMinute < 0) clockAlarmMinute = 0;
+    if (clockAlarmMinute > 59) clockAlarmMinute = 59;
+}
+
+void BruceConfig::validateClockAlarmTone() {
+    if (clockAlarmTone < 0) clockAlarmTone = 0;
+    if (clockAlarmTone > 4) clockAlarmTone = 4;
+}
+
+void BruceConfig::validateTimerAlertTone() {
+    if (timerAlertTone < 0) timerAlertTone = 0;
+    if (timerAlertTone > 4) timerAlertTone = 4;
 }
 
 void BruceConfig::setWifiAtStartup(int value) {
@@ -821,6 +1270,19 @@ void BruceConfig::setRockerInverted(int value) {
 void BruceConfig::validateRockerInvertedValue() {
     if (rockerInverted > 1) rockerInverted = 1;
     if (rockerInverted < 0) rockerInverted = 0;
+}
+
+void BruceConfig::setPowerButtonShortPressAction(int value) {
+    powerButtonShortPressAction = value;
+    validatePowerButtonShortPressAction();
+    saveFile();
+}
+
+void BruceConfig::validatePowerButtonShortPressAction() {
+    if (powerButtonShortPressAction < POWER_BUTTON_SHORT_PRESS_REFRESH_SCREEN ||
+        powerButtonShortPressAction > POWER_BUTTON_SHORT_PRESS_DEEP_SLEEP_MESSAGE) {
+        powerButtonShortPressAction = POWER_BUTTON_SHORT_PRESS_REFRESH_SCREEN;
+    }
 }
 
 void BruceConfig::setBadUSBBLEKeyboardLayout(int value) {
