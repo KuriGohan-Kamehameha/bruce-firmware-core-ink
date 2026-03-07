@@ -78,6 +78,20 @@ void tft_display::display(bool forceFull) {
 #endif
 }
 
+void tft_display::displayRegion(int32_t x, int32_t y, int32_t w, int32_t h) {
+#if defined(HAS_EINK)
+    if (w <= 0 || h <= 0) return;
+    M5.Display.setEpdMode(lgfx::epd_mode_t::epd_fast);
+    M5.Display.display(x, y, w, h);
+#else
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
+    M5.Display.display();
+#endif
+}
+
 void tft_display::setAutoDisplay(bool enabled) { M5.Display.setAutoDisplay(enabled); }
 
 void tft_display::setRotation(uint8_t r) {

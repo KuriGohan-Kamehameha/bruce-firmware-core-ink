@@ -18,7 +18,6 @@
 #include <Arduino.h>
 #include <ESP32Time.h>
 #include <LittleFS.h>
-#include <NTPClient.h>
 #include <SPI.h>
 #include <functional>
 #include <io_expander/io_expander.h> // ./lib/HAL
@@ -82,7 +81,6 @@ extern bool clock_set;
 extern time_t localTime;
 extern struct tm *timeInfo;
 extern ESP32Time rtc;
-extern NTPClient timeClient;
 
 extern int prog_handler; // 0 - Flash, 1 - LittleFS, 2 - Download
 
@@ -223,6 +221,12 @@ extern volatile int forceMenuOption;
 extern volatile uint8_t menuOptionType; // updates when drawing loopoptions, to send to remote controller
 
 extern String menuOptionLabel;
+
+inline void displayBusKeepAlive() {
+#if !defined(HAS_EINK)
+    tft.drawPixel(0, 0, 0);
+#endif
+}
 
 #ifdef HAS_ENCODER_LED
 extern volatile int EncoderLedChange;

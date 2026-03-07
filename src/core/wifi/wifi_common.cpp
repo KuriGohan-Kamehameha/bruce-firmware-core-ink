@@ -8,8 +8,62 @@
 #include <esp_event.h>
 #include <esp_netif.h>
 #include <globals.h>
+#include <time.h>
 
 static TaskHandle_t timezoneTaskHandle = NULL;
+
+namespace {
+constexpr uint32_t kNtpPollIntervalMs = 10000;      // Monitor connectivity without busy polling.
+constexpr uint32_t kNtpResyncIntervalMs = 1800000;  // Periodic drift correction while online.
+constexpr uint32_t kNtpConnectDelayMs = 5000;       // Let WiFi settle before first NTP request.
+portMUX_TYPE timezoneTaskMux = portMUX_INITIALIZER_UNLOCKED;
+bool timezoneTaskStarting = false;
+
+void logWifiTime(const char *prefix) {
+    const time_t nowEpoch = time(nullptr);
+    if (nowEpoch <= 0) {
+        Serial.printf("%s time unavailable (epoch=%lld)\n", prefix, static_cast<long long>(nowEpoch));
+        return;
+    }
+
+    struct tm localNow = {};
+    localtime_r(&nowEpoch, &localNow);
+
+    char timeBuf[40] = {0};
+    if (strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S %Z", &localNow) == 0) {
+        snprintf(
+            timeBuf,
+            sizeof(timeBuf),
+            "%04d-%02d-%02d %02d:%02d:%02d",
+            localNow.tm_year + 1900,
+            localNow.tm_mon + 1,
+            localNow.tm_mday,
+            localNow.tm_hour,
+            localNow.tm_min,
+            localNow.tm_sec
+        );
+    }
+
+    Serial.printf("%s %s\n", prefix, timeBuf);
+}
+
+void ensureTimezoneTaskRunning() {
+    portENTER_CRITICAL(&timezoneTaskMux);
+    const bool alreadyRunning = (timezoneTaskHandle != NULL) || timezoneTaskStarting;
+    if (!alreadyRunning) { timezoneTaskStarting = true; }
+    portEXIT_CRITICAL(&timezoneTaskMux);
+
+    if (alreadyRunning) return;
+
+    TaskHandle_t createdHandle = NULL;
+    BaseType_t taskCreated = xTaskCreate(updateTimezoneTask, "updateTimezone", 4096, NULL, 1, &createdHandle);
+
+    portENTER_CRITICAL(&timezoneTaskMux);
+    timezoneTaskStarting = false;
+    if (taskCreated == pdPASS) { timezoneTaskHandle = createdHandle; }
+    portEXIT_CRITICAL(&timezoneTaskMux);
+}
+} // namespace
 
 void ensureWifiPlatform() {
     static bool netifInitialized = false;
@@ -66,10 +120,10 @@ bool _wifiConnect(const String &ssid, int encryption) {
         wifiIP = WiFi.localIP().toString();
         bruceConfig.addWifiCredential(ssid, password);
 
-        // Start timezone update in background if not already running
-        if (timezoneTaskHandle == NULL) {
-            xTaskCreate(updateTimezoneTask, "updateTimezone", 4096, NULL, 1, &timezoneTaskHandle);
-        }
+        if (bruceConfig.automaticTimeUpdateViaNTP) { updateClockTimezone(); }
+
+        // Keep a lightweight background sync task alive while the device is running.
+        ensureTimezoneTaskRunning();
     }
 
     delay(200);
@@ -227,10 +281,10 @@ void wifiConnectTask(void *pvParameters) {
                 wifiConnected = true;
                 wifiIP = WiFi.localIP().toString();
 
-                // Start timezone update in background if not already running
-                if (timezoneTaskHandle == NULL) {
-                    xTaskCreate(updateTimezoneTask, "updateTimezone", 4096, NULL, 1, &timezoneTaskHandle);
-                }
+                if (bruceConfig.automaticTimeUpdateViaNTP) { updateClockTimezone(); }
+
+                ensureTimezoneTaskRunning();
+                logWifiTime("[Startup][WiFi] Connected. Device time:");
                 drawStatusBar();
                 break;
             }
@@ -273,22 +327,42 @@ bool wifiConnecttoKnownNet(void) {
         wifiConnected = true;
         wifiIP = WiFi.localIP().toString();
 
-        // Start timezone update in background if not already running
-        if (timezoneTaskHandle == NULL) {
-            xTaskCreate(updateTimezoneTask, "updateTimezone", 4096, NULL, 1, &timezoneTaskHandle);
-        }
+        if (bruceConfig.automaticTimeUpdateViaNTP) { updateClockTimezone(); }
+
+        ensureTimezoneTaskRunning();
     }
     return result;
 }
 
 void updateTimezoneTask(void *pvParameters) {
-    // Wait a bit for connection to stabilize before updating timezone
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    bool wasConnected = false;
+    uint32_t lastSyncMs = 0;
 
-    // Only update timezone if WiFi is still connected
-    if (WiFi.isConnected() && wifiConnected) { updateClockTimezone(); }
+    while (true) {
+        const bool isConnected = WiFi.status() == WL_CONNECTED;
 
-    // Clear the task handle before deleting
-    timezoneTaskHandle = NULL;
-    vTaskDelete(NULL);
+        if (bruceConfig.automaticTimeUpdateViaNTP && isConnected) {
+            bool justSynced = false;
+
+            if (!wasConnected) {
+                vTaskDelay(kNtpConnectDelayMs / portTICK_PERIOD_MS);
+                if (WiFi.status() == WL_CONNECTED) {
+                    if (updateClockTimezone()) {
+                        lastSyncMs = millis();
+                        justSynced = true;
+                    }
+                }
+            }
+
+            if (!justSynced && (lastSyncMs == 0 || (millis() - lastSyncMs) >= kNtpResyncIntervalMs)) {
+                if (updateClockTimezone()) { lastSyncMs = millis(); }
+            }
+        } else if (!isConnected) {
+            // Force a fresh sync right after the next successful reconnection.
+            lastSyncMs = 0;
+        }
+
+        wasConnected = isConnected;
+        vTaskDelay(kNtpPollIntervalMs / portTICK_PERIOD_MS);
+    }
 }

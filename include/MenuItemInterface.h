@@ -99,7 +99,7 @@ public:
         int titleY = iconCenterY + iconAreaH / 2 + FG;
 
         tft.setTextSize(FM);
-        tft.drawPixel(0, 0, 0);
+        displayBusKeepAlive();
         tft.fillRect(arrowAreaX, titleY, tftWidth - 2 * arrowAreaX, LH * FM, bruceConfig.bgColor);
         int nchars = (tftWidth - 16) / (LW * FM);
         tft.drawCentreString(getName().substring(0, nchars), iconCenterX, titleY, 1);

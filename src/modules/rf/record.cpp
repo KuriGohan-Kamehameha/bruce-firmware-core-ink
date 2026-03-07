@@ -15,7 +15,7 @@ unsigned long lastAnimationUpdate = 0;
 void sinewave_animation() {
     if (millis() - lastAnimationUpdate < 10) return;
 
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
 
     int centerY = (tftHeight / 2) + 20;
     int amplitude = (tftHeight / 2) - 40;
@@ -104,7 +104,7 @@ float rf_freq_scan() {
             }
             float checkFrequency = subghz_frequency_list[idx];
             setMHZ(checkFrequency);
-            tft.drawPixel(0, 0, 0); // To make sure CC1101 shared with TFT works properly
+            displayBusKeepAlive(); // To make sure CC1101 shared with TFT works properly
             vTaskDelay(5 / portTICK_PERIOD_MS);
             rssi = ELECHOUSE_cc1101.getRssi();
             if (rssi > rssiThreshold) {
@@ -168,7 +168,7 @@ void rf_raw_record_create(RawRecording &recorded, bool &returnToMenu) {
     setMHZ(status.frequency);
 
     // Erase sinewave animation
-    tft.drawPixel(0, 0, 0);
+    displayBusKeepAlive();
     tft.fillRect(10, 30, tftWidth - 20, tftHeight - 40, bruceConfig.bgColor);
     rf_raw_record_draw(status);
 
@@ -227,7 +227,7 @@ void rf_raw_record_create(RawRecording &recorded, bool &returnToMenu) {
                     status.firstSignalTime = receivedTime;
                     status.recordingStarted = true;
                     // Erase sinewave animation
-                    tft.drawPixel(0, 0, 0);
+                    displayBusKeepAlive();
                     tft.fillRect(10, 30, tftWidth - 20, tftHeight - 40, bruceConfig.bgColor);
                 }
                 status.lastSignalTime = receivedTime;

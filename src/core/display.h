@@ -184,8 +184,8 @@ Opt_Coord drawOptions(
 
 void drawSubmenu(int index, std::vector<Option> &options, const char *title);
 
-void drawStatusBar();
-void drawMainBorder(bool clear = true);
+void drawStatusBar(bool showBorder = true);
+void drawMainBorder(bool clear = true, bool showBorder = true);
 void drawMainBorderWithTitle(String title, bool clear = true);
 void printTitle(String title);
 void printSubtitle(String subtitle, bool withLine = true);
