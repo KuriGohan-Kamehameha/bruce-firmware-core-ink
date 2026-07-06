@@ -14,9 +14,9 @@
 // These variables persist across function calls and are safe from stack corruption
 // during USB initialization (which can corrupt local stack variables)
 
-static LayoutConfig layout;  // Screen layout configuration
-static ClickerConfig config; // User configuration (delay, button, clicks)
-static USBHIDMouse Mouse;    // USB HID Mouse instance
+static LayoutConfig layout;          // Screen layout configuration
+static ClickerConfig config;         // User configuration (delay, button, clicks)
+static USBHIDMouse *Mouse = nullptr; // Lazy init to avoid global HID descriptor registration
 
 // Runtime tracking for CPS calculation
 static unsigned long prevMillisec = 0; // Last second timestamp
@@ -62,7 +62,8 @@ LayoutConfig::LayoutConfig() {
  */
 void initClickerUSB() {
     USB.begin();
-    Mouse.begin();
+    if (Mouse == nullptr) Mouse = new USBHIDMouse();
+    if (Mouse != nullptr) Mouse->begin();
     // Serial.println("[USB] Clicker initialized");
 }
 
@@ -74,7 +75,11 @@ void initClickerUSB() {
  */
 void cleanupClickerUSB() {
     // Serial.println("[USB] Starting cleanup...");
-    Mouse.end();
+    if (Mouse != nullptr) {
+        Mouse->end();
+        // Keep instance alive to avoid deleting a polymorphic type with
+        // non-virtual dtor and to preserve lazy HID registration behavior.
+    }
     USB.~ESPUSB(); // Explicit destructor call
     delay(100);
     USB.enableDFU(); // Re-enable DFU for future uploads
@@ -586,6 +591,7 @@ bool handleValueEditing(
             // Open keyboard for custom input
             if (custom_mode && check(SelPress)) {
                 String customValue = num_keyboard(String(config.max_clicks).c_str(), 6, "Custom Click Count");
+                if (customValue == "\x1B") return false;
                 int val = atoi(customValue.c_str());
                 config.max_clicks = (val < 0) ? 0 : val;
                 custom_mode = false;
@@ -641,7 +647,7 @@ unsigned long performClicking(const char *btnNameStr) {
     // Main clicking loop
     while (!shouldStop) {
         // Step 1: Perform click
-        Mouse.click(mouseButton);
+        if (Mouse != nullptr) Mouse->click(mouseButton);
         cpsClickCount++;
         totalClicks++;
 

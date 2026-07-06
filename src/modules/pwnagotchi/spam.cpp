@@ -6,7 +6,7 @@ Thanks to thoses developers for their projects:
 
 Thanks to @bmorcelli for his help doing a better code.
 */
-
+#if !defined(LITE_VERSION)
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 #include <ArduinoJson.h>
@@ -129,6 +129,9 @@ void parseSpamCsv(String values, const char **out, bool *allocatedFlags, int &co
 }
 } // namespace
 
+// External variable for all channels toggle
+extern bool use_all_channels;
+
 // Forward declarations
 void displaySpamStatus();
 void loadFacesAndNames();
@@ -223,10 +226,24 @@ const char *pwnd_names[] = {
 // Tâche pour envoyer des trames beacon avec changement de face, de nom et de canal
 void beacon_task(void *pvParameters) {
     (void)pvParameters;
-    const uint8_t channels[] = {1, 6, 11}; // Liste des canaux Wi-Fi à utiliser
-    const int num_channels = sizeof(channels) / sizeof(channels[0]);
+    // Primary channels
+    const uint8_t channels_primary[] = {1, 6, 11};
+    // All channels
+    const uint8_t channels_all[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+
+    const uint8_t *channels;
+    int num_channels;
 
     while (spamRunning) {
+        // Determine which channels to use based on toggle
+        if (use_all_channels) {
+            channels = channels_all;
+            num_channels = sizeof(channels_all) / sizeof(channels_all[0]);
+        } else {
+            channels = channels_primary;
+            num_channels = sizeof(channels_primary) / sizeof(channels_primary[0]);
+        }
+
         if (dos_pwnd) {
             // Send PWND beacons
             for (int ch = 0; ch < num_channels; ++ch) {
@@ -275,8 +292,14 @@ void displaySpamStatus() {
     int current_face_index = 0;
     int current_name_index = 0;
     int current_channel_index = 0;
-    const uint8_t channels[] = {1, 6, 11};
-    const int num_channels = sizeof(channels) / sizeof(channels[0]);
+
+    // Primary channels
+    const uint8_t channels_primary[] = {1, 6, 11};
+    // All channels
+    const uint8_t channels_all[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+
+    const uint8_t *channels;
+    int num_channels;
 
     while (spamRunning) {
 
@@ -293,6 +316,16 @@ void displaySpamStatus() {
             Serial.printf("Change Identity %s.\n", change_identity ? "enabled" : "disabled");
         }
 
+        // Determine which channels to use based on toggle
+        if (use_all_channels) {
+            channels = channels_all;
+            num_channels = sizeof(channels_all) / sizeof(channels_all[0]);
+        } else {
+            channels = channels_primary;
+            num_channels = sizeof(channels_primary) / sizeof(channels_primary[0]);
+        }
+        if (current_channel_index >= num_channels) current_channel_index = 0;
+
         // Keep dynamic area clean so short/long strings don't leave stale text.
         tft.fillRect(0, 45, tftWidth, 80, bruceConfig.bgColor);
 
@@ -301,6 +334,7 @@ void displaySpamStatus() {
         tft.printf("Flood:%s", change_identity ? "1" : "0");
         tft.setCursor(125, 45);
         tft.printf("DoScreen:%s", dos_pwnd ? "1" : "0");
+
         if (!dos_pwnd) {
             if (num_faces <= 0 || num_names <= 0) {
                 spamRunning = false;
@@ -483,3 +517,4 @@ void send_pwnagotchi_beacon_main() {
     displaySpamStatus();
     spamRunning = false;
 }
+#endif

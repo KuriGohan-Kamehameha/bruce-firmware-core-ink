@@ -85,6 +85,7 @@ uint32_t settingsCallback(cmd *c) {
     if (setting_name == "rfidModule")
         bruceConfigPins.setRfidModule(static_cast<RFIDModules>(setting_value.toInt()));
     if (setting_name == "wigleBasicToken") bruceConfig.setWigleBasicToken(setting_value);
+    if (setting_name == "wdgwarsApiKey") bruceConfig.setWdgwarsApiKey(setting_value);
     if (setting_name == "devMode") bruceConfig.setDevMode(setting_value.toInt());
     if (setting_name == "rockerInverted") bruceConfig.setRockerInverted(setting_value.toInt());
     if (setting_name == "powerButtonShortPressAction")

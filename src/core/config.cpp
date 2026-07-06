@@ -53,6 +53,7 @@ JsonDocument BruceConfig::toJson() const {
     setting["timerAlertTone"] = timerAlertTone;
     setting["wifiAtStartup"] = wifiAtStartup;
     setting["instantBoot"] = instantBoot;
+    setting["keyboardLang"] = keyboardLang;
 
 #ifdef HAS_RGB_LED
     setting["ledBright"] = ledBright;
@@ -73,6 +74,7 @@ JsonDocument BruceConfig::toJson() const {
     _wifiAp["ssid"] = wifiAp.ssid;
     _wifiAp["pwd"] = wifiAp.pwd;
     setting["wifiMAC"] = wifiMAC; //@IncursioHack
+    setting["TerminalLog"] = TerminalLog;
 
     JsonArray _evilWifiNames = setting["evilWifiNames"].to<JsonArray>();
     for (auto key : evilWifiNames) _evilWifiNames.add(key);
@@ -83,6 +85,7 @@ JsonDocument BruceConfig::toJson() const {
     _evilWifiEndpoints["showEndpoints"] = evilPortalEndpoints.showEndpoints;
     _evilWifiEndpoints["allowSetSsid"] = evilPortalEndpoints.allowSetSsid;
     _evilWifiEndpoints["allowGetCreds"] = evilPortalEndpoints.allowGetCreds;
+    _evilWifiEndpoints["gatewayIp"] = evilPortalGatewayIp;
 
     setting["evilWifiPasswordMode"] = evilPortalPasswordMode;
 
@@ -92,6 +95,7 @@ JsonDocument BruceConfig::toJson() const {
     setting["startupApp"] = startupApp;
     setting["startupAppJSInterpreterFile"] = startupAppJSInterpreterFile;
     setting["wigleBasicToken"] = wigleBasicToken;
+    setting["wdgwarsApiKey"] = wdgwarsApiKey;
     setting["devMode"] = devMode;
     setting["colorInverted"] = colorInverted;
     setting["rockerInverted"] = rockerInverted;
@@ -427,6 +431,11 @@ void BruceConfig::fromFile(bool checkFS) {
         count++;
         log_e("Fail");
     }
+    if (!setting["keyboardLang"].isNull()) {
+        keyboardLang = setting["keyboardLang"].as<String>();
+    } else {
+        keyboardLang = "QWERTY";
+    }
 
 #ifdef HAS_RGB_LED
     if (!setting["ledBright"].isNull()) {
@@ -502,6 +511,12 @@ void BruceConfig::fromFile(bool checkFS) {
         count++;
         log_e("wifiMAC not found, using default");
     }
+    if (!setting["TerminalLog"].isNull()) {
+        TerminalLog = setting["TerminalLog"].as<bool>();
+    } else {
+        count++;
+        log_e("TerminalLog not found, using default");
+    }
 
     // Wifi List
     if (!setting["wifi"].isNull()) {
@@ -529,6 +544,11 @@ void BruceConfig::fromFile(bool checkFS) {
         evilPortalEndpoints.showEndpoints = evilPortalEndpointsObj["showEndpoints"].as<bool>();
         evilPortalEndpoints.allowSetSsid = evilPortalEndpointsObj["allowSetSsid"].as<bool>();
         evilPortalEndpoints.allowGetCreds = evilPortalEndpointsObj["allowGetCreds"].as<bool>();
+        if (!evilPortalEndpointsObj["gatewayIp"].isNull()) {
+            evilPortalGatewayIp = evilPortalEndpointsObj["gatewayIp"].as<String>();
+        } else {
+            evilPortalGatewayIp = "172.0.0.1";
+        }
     } else {
         count++;
         log_e("Fail");
@@ -562,6 +582,12 @@ void BruceConfig::fromFile(bool checkFS) {
 
     if (!setting["wigleBasicToken"].isNull()) {
         wigleBasicToken = setting["wigleBasicToken"].as<String>();
+    } else {
+        count++;
+        log_e("Fail");
+    }
+    if (!setting["wdgwarsApiKey"].isNull()) {
+        wdgwarsApiKey = setting["wdgwarsApiKey"].as<String>();
     } else {
         count++;
         log_e("Fail");
@@ -715,6 +741,7 @@ void BruceConfig::validateConfig() {
     validateEvilEndpointCreds();
     validateEvilEndpointSsid();
     validateEvilPasswordMode();
+    validateEvilGatewayIp();
 #if defined(HAS_EINK)
     priColor = 0x0000;
     secColor = 0x0000;
@@ -1106,7 +1133,7 @@ void BruceConfig::setLedEffect(int value) {
 }
 
 void BruceConfig::validateLedEffectValue() {
-    if (ledEffect < 0 || ledEffect > 5) ledEffect = 0;
+    if (ledEffect < 0 || ledEffect > 9) ledEffect = 0;
 }
 
 void BruceConfig::setLedEffectSpeed(int value) {
@@ -1145,6 +1172,11 @@ void BruceConfig::setWebUICreds(const String &usr, const String &pwd) {
 void BruceConfig::setWifiApCreds(const String &ssid, const String &pwd) {
     wifiAp.ssid = ssid;
     wifiAp.pwd = pwd;
+    saveFile();
+}
+
+void BruceConfig::setTerminalLog(bool value) {
+    TerminalLog = value;
     saveFile();
 }
 
@@ -1225,6 +1257,17 @@ void BruceConfig::validateEvilPasswordMode() {
     if (evilPortalPasswordMode < 0 || evilPortalPasswordMode > 2) evilPortalPasswordMode = FULL_PASSWORD;
 }
 
+void BruceConfig::setEvilGatewayIp(String value) {
+    evilPortalGatewayIp = value;
+    validateEvilGatewayIp();
+    saveFile();
+}
+
+void BruceConfig::validateEvilGatewayIp() {
+    IPAddress gatewayIp;
+    if (!gatewayIp.fromString(evilPortalGatewayIp)) evilPortalGatewayIp = "172.0.0.1";
+}
+
 void BruceConfig::setStartupApp(String value) {
     startupApp = value;
     saveFile();
@@ -1237,6 +1280,11 @@ void BruceConfig::setStartupAppJSInterpreterFile(String value) {
 
 void BruceConfig::setWigleBasicToken(String value) {
     wigleBasicToken = value;
+    saveFile();
+}
+
+void BruceConfig::setWdgwarsApiKey(String value) {
+    wdgwarsApiKey = value;
     saveFile();
 }
 

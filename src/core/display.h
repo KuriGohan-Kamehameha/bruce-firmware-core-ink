@@ -64,12 +64,7 @@ public:
     AnimatedGIF *gif;
 
 private:
-    unsigned long lTime = millis();
-
     static FS *GifFs;
-
-    int zero = 0;
-    int *delayMilliseconds = &zero;
 
     GifPosition gifPosition;
 
@@ -107,6 +102,7 @@ bool showGif(
 );
 #endif
 bool showJpeg(FS &fs, String filename, int x = 0, int y = 0, bool center = false);
+bool showJpeg(const uint8_t *data_array, size_t data_size, int x, int y, bool center = false);
 
 uint16_t getComplementaryColor(uint16_t color);
 uint16_t getComplementaryColor2(uint16_t color);
@@ -216,6 +212,8 @@ void drawBLE_beacon(int x, int y, uint16_t color);
 void drawGPS(int x, int y);
 
 void drawGpsSmall(int x, int y);
+
+void drawSdSmall(int x, int y);
 
 void drawCreditCard(int x, int y);
 

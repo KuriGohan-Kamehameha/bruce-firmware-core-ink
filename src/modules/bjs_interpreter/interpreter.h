@@ -2,9 +2,6 @@
 #define __BJS_INTERPRETER_H__
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
 #include "core/display.h"
-#include "stdio.h"
-
-#include <string.h>
 
 extern TaskHandle_t interpreterTaskHandler;
 
@@ -15,7 +12,7 @@ extern TaskHandle_t interpreterTaskHandler;
 void interpreterHandler(void *pvParameters);
 void run_bjs_script();
 bool run_bjs_script_headless(char *code);
-bool run_bjs_script_headless(FS fs, String filename);
+bool run_bjs_script_headless(FS &fs, String filename);
 
 String getScriptsFolder(FS *&fs);
 std::vector<Option>

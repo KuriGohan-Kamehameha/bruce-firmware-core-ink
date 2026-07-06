@@ -42,6 +42,7 @@ static const JSPropDef js_object[] = {
     JS_CFUNC_DEF("setPrototypeOf", 2, js_object_setPrototypeOf),
     JS_CFUNC_DEF("create", 2, js_object_create),
     JS_CFUNC_DEF("keys", 1, js_object_keys),
+    JS_CFUNC_DEF("getOwnPropertyNames", 1, js_object_keys),
     JS_PROP_END,
 };
 
@@ -97,6 +98,7 @@ static const JSPropDef js_string_proto[] = {
     JS_CFUNC_MAGIC_DEF("charCodeAt", 1, js_string_charAt, magic_charCodeAt ),
     JS_CFUNC_MAGIC_DEF("codePointAt", 1, js_string_charAt, magic_codePointAt ),
     JS_CFUNC_DEF("slice", 2, js_string_slice ),
+    JS_CFUNC_DEF("substr", 2, js_string_substring ),
     JS_CFUNC_DEF("substring", 2, js_string_substring ),
     JS_CFUNC_DEF("concat", 1, js_string_concat ),
     JS_CFUNC_MAGIC_DEF("indexOf", 1, js_string_indexOf, 0 ),
@@ -135,6 +137,7 @@ static const JSPropDef js_array_proto[] = {
     JS_CFUNC_DEF("shift", 0, js_array_shift ),
     JS_CFUNC_DEF("slice", 2, js_array_slice ),
     JS_CFUNC_DEF("splice", 2, js_array_splice ),
+    JS_CFUNC_DEF("fill", 3, js_fill ),
     JS_CFUNC_MAGIC_DEF("unshift", 1, js_array_push, 1 ),
     JS_CFUNC_MAGIC_DEF("indexOf", 1, js_array_indexOf, 0 ),
     JS_CFUNC_MAGIC_DEF("lastIndexOf", 1, js_array_indexOf, 1 ),
@@ -264,6 +267,7 @@ static const JSPropDef js_typed_array_base_proto[] = {
     JS_CFUNC_DEF("toString", 0, js_array_toString ),
     JS_CFUNC_DEF("subarray", 2, js_typed_array_subarray ),
     JS_CFUNC_DEF("set", 1, js_typed_array_set ),
+    JS_CFUNC_DEF("fill", 3, js_fill ),
     JS_PROP_END,
 };
 
@@ -421,6 +425,9 @@ const JSPropDef js_subghz[] = {
     JS_CFUNC_DEF("read", 1, native_subghzRead),
     JS_CFUNC_DEF("readRaw", 1, native_subghzReadRaw),
     JS_CFUNC_DEF("setFrequency", 1, native_subghzSetFrequency),
+    JS_CFUNC_DEF("txSetup", 1, native_subghzTxSetup),
+    JS_CFUNC_DEF("txPulses", 1, native_subghzTxPulses),
+    JS_CFUNC_DEF("txEnd", 0, native_subghzTxEnd),
     JS_PROP_END,
 };
 
@@ -474,11 +481,19 @@ static const JSPropDef js_gpio[] = {
     JS_CFUNC_DEF("analogRead", 1, native_analogRead),
     JS_CFUNC_DEF("touchRead", 1, native_touchRead),
     JS_CFUNC_DEF("digitalWrite", 2, native_digitalWrite),
-    JS_CFUNC_DEF("analogWrite", 2, native_analogWrite),
     JS_CFUNC_DEF("dacWrite", 2, native_dacWrite),
-    JS_CFUNC_DEF("ledcSetup", 3, native_ledcSetup),
-    JS_CFUNC_DEF("ledcAttachPin", 2, native_ledcAttachPin),
+
+    JS_CFUNC_DEF("analogWrite", 2, native_analogWrite),
+    JS_CFUNC_DEF("analogWriteResolution", 2, native_analogWriteResolution),
+    JS_CFUNC_DEF("analogWriteFrequency", 2, native_analogWriteFrequency),
+
+    JS_CFUNC_DEF("ledcAttach", 3, native_ledcAttach),
     JS_CFUNC_DEF("ledcWrite", 2, native_ledcWrite),
+    JS_CFUNC_DEF("ledcWriteTone", 3, native_ledcWriteTone),
+    JS_CFUNC_DEF("ledcFade", 3, native_ledcFade),
+    JS_CFUNC_DEF("ledcChangeFrequency", 3, native_ledcChangeFrequency),
+    JS_CFUNC_DEF("ledcDetach", 3, native_ledcDetach),
+
     JS_CFUNC_DEF("pins", 0, native_pins),
     JS_PROP_END,
 };
@@ -515,10 +530,33 @@ const JSClassDef js_wifi_obj = JS_OBJECT_DEF("WiFi", js_wifi);
 /* Mic module */
 static const JSPropDef js_mic[] = {
     JS_CFUNC_DEF("recordWav", 2, native_micRecordWav),
+    JS_CFUNC_DEF("captureSamples", 1, native_micCaptureSamples),
     JS_PROP_END,
 };
 
 const JSClassDef js_mic_obj = JS_OBJECT_DEF("Mic", js_mic);
+
+/* Rfid module */
+static const JSPropDef js_rfid[] = {
+    JS_CFUNC_DEF("read", 1, native_rfidRead),
+    JS_CFUNC_DEF("readUID", 1, native_rfidReadUID),
+    JS_CFUNC_DEF("write", 1, native_rfidWrite),
+    JS_CFUNC_DEF("save", 1, native_rfidSave),
+    JS_CFUNC_DEF("load", 1, native_rfidLoad),
+    JS_CFUNC_DEF("clear", 0, native_rfidClear),
+    JS_CFUNC_DEF("addMifareKey", 1, native_rfid_AddMifareKey),
+
+    // SRIX functions
+    JS_CFUNC_DEF("srixRead", 1, native_srixRead),
+    JS_CFUNC_DEF("srixWrite", 1, native_srixWrite),
+    JS_CFUNC_DEF("srixSave", 1, native_srixSave),
+    JS_CFUNC_DEF("srixLoad", 1, native_srixLoad),
+    JS_CFUNC_DEF("srixClear", 0, native_srixClear),
+    JS_CFUNC_DEF("srixWriteBlock", 2, native_srixWriteBlock),
+    JS_PROP_END,
+};
+
+const JSClassDef js_rfid_obj = JS_OBJECT_DEF("Rfid", js_rfid);
 
 /* Runtime module */
 static const JSPropDef js_runtime[] = {
@@ -530,6 +568,52 @@ static const JSPropDef js_runtime[] = {
 };
 
 const JSClassDef js_runtime_obj = JS_OBJECT_DEF("Runtime", js_runtime);
+
+/* BLE module */
+static const JSPropDef js_ble[] = {
+    JS_CFUNC_DEF("scan", 1, native_bleScan),
+    JS_CFUNC_DEF("advertise", 1, native_bleAdvertise),
+    JS_CFUNC_DEF("stopAdvertise", 0, native_bleStopAdvertise),
+    JS_PROP_END,
+};
+
+const JSClassDef js_ble_obj = JS_OBJECT_DEF("BLE", js_ble);
+
+/* NRF24 module */
+static const JSPropDef js_nrf24[] = {
+    JS_CFUNC_DEF("begin", 1, native_nrf24Begin),
+    JS_CFUNC_DEF("send", 2, native_nrf24Send),
+    JS_CFUNC_DEF("receive", 1, native_nrf24Receive),
+    JS_CFUNC_DEF("setChannel", 1, native_nrf24SetChannel),
+    JS_CFUNC_DEF("isConnected", 0, native_nrf24IsConnected),
+    JS_PROP_END,
+};
+
+const JSClassDef js_nrf24_obj = JS_OBJECT_DEF("NRF24", js_nrf24);
+
+/* LED module */
+static const JSPropDef js_led[] = {
+    JS_CFUNC_DEF("setColor", 3, native_ledSetColor),
+    JS_CFUNC_DEF("setBrightness", 1, native_ledSetBrightness),
+    JS_CFUNC_DEF("off", 0, native_ledOff),
+    JS_CFUNC_DEF("blink", 1, native_ledBlink),
+    JS_PROP_END,
+};
+
+const JSClassDef js_led_obj = JS_OBJECT_DEF("LED", js_led);
+
+/* Menu module (native Bruce UI) */
+static const JSPropDef js_menu[] = {
+    JS_CFUNC_DEF("show", 2, native_menuShow),
+    JS_CFUNC_DEF("showMainBorder", 1, native_menuShowMainBorder),
+    JS_CFUNC_DEF("showMainBorderWithTitle", 1, native_menuShowMainBorderWithTitle),
+    JS_CFUNC_DEF("printTitle", 1, native_menuPrintTitle),
+    JS_CFUNC_DEF("printSubtitle", 1, native_menuPrintSubtitle),
+    JS_CFUNC_DEF("displayMessage", 1, native_menuDisplayMessage),
+    JS_PROP_END,
+};
+
+const JSClassDef js_menu_obj = JS_OBJECT_DEF("Menu", js_menu);
 
 /* Display module */
 static const JSPropDef js_display[] = {
@@ -557,8 +641,9 @@ static const JSPropDef js_display[] = {
     JS_CFUNC_DEF("drawFillTriangle", 7, native_drawFillTriangle),
     JS_CFUNC_DEF("drawCircle", 4, native_drawCircle),
     JS_CFUNC_DEF("drawFillCircle", 4, native_drawFillCircle),
-    JS_CFUNC_DEF("drawArc", 6, native_drawArc),
+    JS_CFUNC_DEF("drawBitmap", 7, native_drawBitmap),
     JS_CFUNC_DEF("drawXBitmap", 7, native_drawXBitmap),
+    JS_CFUNC_DEF("drawArc", 6, native_drawArc),
     JS_CFUNC_DEF("drawJpg", 4, native_drawJpg),
 #if !defined(LITE_VERSION)
     JS_CFUNC_DEF("drawGif", 6, native_drawGif),
@@ -611,6 +696,7 @@ static const JSPropDef js_sprite_proto[] = {
     JS_CFUNC_DEF("drawFillRoundRect", 6, native_drawFillRoundRect),
     JS_CFUNC_DEF("drawCircle", 4, native_drawCircle),
     JS_CFUNC_DEF("drawFillCircle", 4, native_drawFillCircle),
+    JS_CFUNC_DEF("drawBitmap", 7, native_drawBitmap),
     JS_CFUNC_DEF("drawXBitmap", 7, native_drawXBitmap),
     JS_CFUNC_DEF("drawJpg", 4, native_drawJpg),
     JS_CFUNC_DEF("width", 0, native_width),
@@ -653,6 +739,20 @@ static const JSClassDef js_gif_class =
 
 static const JSClassDef js_timers_state_class =
     JS_CLASS_DEF("TimersState", 0, NULL, JS_CLASS_TIMERS_STATE, NULL, NULL, NULL, native_timers_state_finalizer);
+
+/* Buffer */
+static const JSPropDef js_buffer_proto[] = {
+    JS_CFUNC_DEF("toString", 1, native_buffer_toString),
+    JS_PROP_END,
+};
+
+static const JSPropDef js_buffer[] = {
+    JS_CFUNC_DEF("from", 2, native_buffer_from),
+    JS_PROP_END,
+};
+
+static const JSClassDef js_buffer_class =
+    JS_CLASS_DEF("Buffer", 0, NULL, JS_CLASS_BUFFER, js_buffer, js_buffer_proto, NULL, NULL);
 
 static const JSPropDef js_internal_functions[] = {
     JS_PROP_CLASS_DEF("TimersState", &js_timers_state_class),
@@ -729,6 +829,10 @@ static const JSPropDef js_global_object[] = {
     JS_CFUNC_DEF("to_hex_string", 1, native_to_hex_string ),
     JS_CFUNC_DEF("to_lower_case", 1, native_to_lower_case ),
     JS_CFUNC_DEF("to_upper_case", 1, native_to_upper_case ),
+    JS_CFUNC_DEF("atob", 1, native_atob ),
+    JS_CFUNC_DEF("btoa", 1, native_btoa ),
+    JS_CFUNC_DEF("atob_bin", 1, native_atob_bin ),
+    JS_CFUNC_DEF("btoa_bin", 1, native_btoa_bin ),
     JS_CFUNC_DEF("exit", 0, native_exit ),
 
     /* Modules */
@@ -743,17 +847,23 @@ static const JSPropDef js_global_object[] = {
     JS_PROP_CLASS_DEF("keyboard", &js_keyboard_obj),
     JS_PROP_CLASS_DEF("notification", &js_notification_obj),
     JS_PROP_CLASS_DEF("mic", &js_mic_obj),
+    JS_PROP_CLASS_DEF("rfid", &js_rfid_obj),
     JS_PROP_CLASS_DEF("runtime", &js_runtime_obj),
     JS_PROP_CLASS_DEF("serial", &js_serial_obj),
     JS_PROP_CLASS_DEF("storage", &js_storage_obj),
     JS_PROP_CLASS_DEF("subghz", &js_subghz_obj),
     JS_PROP_CLASS_DEF("wifi", &js_wifi_obj),
+    JS_PROP_CLASS_DEF("ble", &js_ble_obj),
+    JS_PROP_CLASS_DEF("nrf24", &js_nrf24_obj),
+    JS_PROP_CLASS_DEF("led", &js_led_obj),
+    JS_PROP_CLASS_DEF("menu", &js_menu_obj),
 
     // MUST BE IN THE SAME ORDER AS IN THE user_classes_js FILE they cannot be guarded by #ifdef LITE_VERSION
     JS_PROP_CLASS_DEF("TimersState", &js_timers_state_class),
     JS_PROP_CLASS_DEF("Sprite", &js_sprite_class),
     JS_PROP_CLASS_DEF("TextViewer", &js_textviewer_class),
     JS_PROP_CLASS_DEF("Gif", &js_gif_class),
+    JS_PROP_CLASS_DEF("Buffer", &js_buffer_class),
 
     JS_PROP_CLASS_DEF("__internal_functions", &js_internal_functions_obj),
 

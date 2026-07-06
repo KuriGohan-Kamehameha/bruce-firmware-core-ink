@@ -96,6 +96,7 @@ public:
     int timerAlertTone = 0;
     int wifiAtStartup = 0;
     int instantBoot = 0;
+    String keyboardLang = "QWERTY"; // "QWERTY" | "AZERTY" | "QWERTZ"
 
 #ifdef HAS_RGB_LED
     // Led
@@ -114,10 +115,12 @@ public:
     std::map<String, String> wifi = {};
     std::set<String> evilWifiNames = {};
     String wifiMAC = ""; //@IncursioHack
+    bool TerminalLog = true;
 
     // EvilPortal
     EvilPortalEndpoints evilPortalEndpoints = {"/creds", "/ssid", true, true, true};
     EvilPortalPasswordMode evilPortalPasswordMode = FULL_PASSWORD;
+    String evilPortalGatewayIp = "172.0.0.1";
 
     void setWifiMAC(const String &mac) {
         wifiMAC = mac;
@@ -131,6 +134,7 @@ public:
     String startupApp = "";
     String startupAppJSInterpreterFile = "";
     String wigleBasicToken = "";
+    String wdgwarsApiKey = "your 64-char hex key from wdgwars.pl/profile";
     int devMode = 0;
 #if defined(HAS_EINK)
     int colorInverted = 0;
@@ -255,6 +259,7 @@ public:
     // Wifi
     void setWebUICreds(const String &usr, const String &pwd);
     void setWifiApCreds(const String &ssid, const String &pwd);
+    void setTerminalLog(bool value);
     void addWifiCredential(const String &ssid, const String &pwd);
     void addQrCodeEntry(const String &menuName, const String &content);
     void removeQrCodeEntry(const String &menuName);
@@ -267,9 +272,11 @@ public:
     void setEvilAllowGetCreds(bool value);
     void setEvilAllowSetSsid(bool value);
     void setEvilPasswordMode(EvilPortalPasswordMode value);
+    void setEvilGatewayIp(String value);
     void validateEvilEndpointCreds();
     void validateEvilEndpointSsid();
     void validateEvilPasswordMode();
+    void validateEvilGatewayIp();
 
     // RFID
     void addMifareKey(String value);
@@ -279,6 +286,7 @@ public:
     void setStartupApp(String value);
     void setStartupAppJSInterpreterFile(String value);
     void setWigleBasicToken(String value);
+    void setWdgwarsApiKey(String value);
     void setDevMode(int value);
     void validateDevModeValue();
     void setColorInverted(int value);

@@ -1,5 +1,6 @@
 #ifndef __DUCKY_TYPER_H
 #define __DUCKY_TYPER_H
+#if !defined(LITE_VERSION)
 #include <Arduino.h>
 #include <SD.h>
 #include <USB.h>
@@ -46,7 +47,7 @@ void sendAltString(HIDInterface *hid, const String &text);
 
 void printHeaderBadUSBBLE(String bad_script);
 void printStatusBadUSBBLE(String status);
-void printTFTBadUSBBLE(String text, uint16_t color = NULL, bool newline = false);
+void printTFTBadUSBBLE(String text, uint16_t color = TFT_WHITE, bool newline = false);
 
 void printDecimalTime(uint32_t milliseconds);
 
@@ -56,4 +57,5 @@ bool handlePauseResume();
 // Presenter mode - press button to advance slides
 void PresenterMode(HIDInterface *&hid, bool ble = true);
 
+#endif
 #endif

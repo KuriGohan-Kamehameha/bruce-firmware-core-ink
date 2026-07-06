@@ -4,6 +4,7 @@
               github.com/spacehuhn
   ===========================================
 */
+#if !defined(LITE_VERSION)
 #include "sniffer.h"
 /* include all necessary libraries */
 #include "esp_wifi.h"
@@ -29,6 +30,7 @@
 #include "core/display.h"
 #include "core/mykeyboard.h"
 #include "core/sd_functions.h"
+#include "core/wifi/webInterface.h"
 #include "core/wifi/wifi_common.h"
 #include <Arduino.h>
 #include <globals.h>
@@ -340,7 +342,9 @@ static String sanitizeSsid(const char *ssid) {
 
 static String macToHex(const uint8_t *mac) {
     char buffer[13] = {0};
-    sprintf(buffer, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    snprintf(
+        buffer, sizeof(buffer), "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+    );
     return String(buffer);
 }
 
@@ -1008,6 +1012,9 @@ static std::vector<String> recentSsidsOnChannel(uint8_t channel, size_t maxItems
 
 //===== SETUP =====//
 void sniffer_setup() {
+    // Stop WebUI before setting WiFi mode for sniffer
+    cleanlyStopWebUiForWiFiFeature();
+
     FS *Fs;
     int redraw = true;
     bool clearScreen = true;
@@ -1038,9 +1045,10 @@ void sniffer_setup() {
     SnifferMode startMode = sniffer_full_mode_available() ? SnifferMode::Full : SnifferMode::HandshakesOnly;
     sniffer_set_mode(startMode);
 
-    displayTextLine("Sniffing Started");
     tft.setTextSize(FP);
-    tft.setCursor(80, 100);
+    tft.setTextColor(bruceConfig.priColor, bruceConfig.bgColor);
+    tft.setCursor(10, BORDER_PAD_Y + FM * LH);
+    tft.println("Sniffing Started");
 
     sniffer_reset_handshake_cache(); // Need to clear to restart HS count
     registeredBeaconsClear();
@@ -1053,8 +1061,8 @@ void sniffer_setup() {
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 
     wifi_config_t wifi_config;
-    strcpy((char *)wifi_config.ap.ssid, "BruceSniffer");
-    strcpy((char *)wifi_config.ap.password, "brucenet");
+    strlcpy((char *)wifi_config.ap.ssid, "BruceSniffer", sizeof(wifi_config.ap.ssid));
+    strlcpy((char *)wifi_config.ap.password, "brucenet", sizeof(wifi_config.ap.password));
     wifi_config.ap.ssid_len = strlen("BruceSniffer");
     wifi_config.ap.channel = 1;                   // Channel
     wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK; // auth mode
@@ -1354,7 +1362,7 @@ Exit:
     esp_wifi_set_promiscuous(false);
     esp_wifi_stop();
     esp_wifi_set_promiscuous_rx_cb(NULL);
-    esp_wifi_deinit();
+    // DO NOT call esp_wifi_deinit() here - let wifi_common.h handle it
     sniffer_wait_for_flush(1000);
     closeRawFile();
     closeDeauthFile();
@@ -1366,3 +1374,4 @@ void setHandshakeSniffer() {
     esp_wifi_set_promiscuous_rx_cb(NULL);
     esp_wifi_set_promiscuous_rx_cb(sniffer);
 }
+#endif

@@ -53,6 +53,7 @@ void TagOMatic::set_rfid_module() {
 }
 
 void TagOMatic::setup() {
+    returnToMenu = false;
     set_rfid_module();
 
     if (!_rfid->begin()) {
@@ -66,6 +67,7 @@ void TagOMatic::setup() {
 
 void TagOMatic::loop() {
     while (1) {
+        if (returnToMenu) break;
         if (check(EscPress)) {
             returnToMenu = true;
             break;
@@ -82,6 +84,7 @@ void TagOMatic::loop() {
             case CUSTOM_UID_MODE: write_custom_uid(); break;
             case WRITE_MODE: write_data(); break;
             case WRITE_NDEF_MODE: write_ndef_data(); break;
+            case EMULATE_MODE: emulate_card(); break;
             case ERASE_MODE: erase_card(); break;
             case SAVE_MODE: save_file(); break;
         }
@@ -95,6 +98,7 @@ void TagOMatic::select_state() {
         options.emplace_back("Custom UID", [this]() { set_state(CUSTOM_UID_MODE); });
         options.emplace_back("Check tag", [this]() { set_state(CHECK_MODE); });
         options.emplace_back("Write data", [this]() { set_state(WRITE_MODE); });
+        options.emplace_back("Emulate tag", [this]() { set_state(EMULATE_MODE); });
         options.emplace_back("Save file", [this]() { set_state(SAVE_MODE); });
     }
     options.emplace_back("Read tag", [this]() { set_state(READ_MODE); });
@@ -141,6 +145,13 @@ void TagOMatic::set_state(RFID_State state) {
             padprintln("");
             break;
         case WRITE_NDEF_MODE: _ndef_created = false; break;
+        case EMULATE_MODE:
+            padprintln("Waiting for an NFC reader...");
+            padprintln("Using loaded/read NDEF");
+            padprintln("(fallback: test URL)");
+            padprintln("Press [BACK] to stop.");
+            padprintln("");
+            break;
         case SAVE_MODE:
         case ERASE_MODE:
         case CUSTOM_UID_MODE: break;
@@ -161,6 +172,7 @@ void TagOMatic::display_banner() {
         case ERASE_MODE: printSubtitle("ERASE MODE"); break;
         case WRITE_MODE: printSubtitle("WRITE DATA MODE"); break;
         case WRITE_NDEF_MODE: printSubtitle("WRITE NDEF MODE"); break;
+        case EMULATE_MODE: printSubtitle("EMULATE MODE"); break;
         case SAVE_MODE: printSubtitle("SAVE MODE"); break;
     }
 
@@ -283,9 +295,37 @@ void TagOMatic::clone_card() {
     set_state(READ_MODE);
 }
 
+void TagOMatic::emulate_card() {
+    int result = _rfid->emulate();
+    if (returnToMenu) return;
+
+    switch (result) {
+        case RFIDInterface::SUCCESS:
+            displaySuccess("Reader interaction complete.");
+            delay(400);
+            break;
+        case RFIDInterface::TAG_NOT_PRESENT:
+            displayError("No NFC reader detected.", true);
+            set_state(EMULATE_MODE);
+            break;
+        case RFIDInterface::NOT_IMPLEMENTED:
+            displayError("Not implemented for this module.", true);
+            set_state(READ_MODE);
+            break;
+        case RFIDInterface::FAILURE:
+            displayError("Target mode start failed.", true);
+            set_state(EMULATE_MODE);
+            break;
+        default:
+            displayError("Emulation failed. Re-try.", true);
+            set_state(EMULATE_MODE);
+            break;
+    }
+}
+
 void TagOMatic::write_custom_uid() {
     String custom_uid = keyboard("", _rfid->uid.size * 2, "UID (hex):");
-
+    if (custom_uid == "\x1B") return;
     custom_uid.trim();
     custom_uid.replace(" ", "");
     custom_uid.toUpperCase();
@@ -380,6 +420,7 @@ void TagOMatic::create_ndef_text() {
     _rfid->ndefMessage.payload[2] = 0x6E;
 
     String ndef_data = keyboard("", NDEF_DATA_SIZE, "NDEF data:");
+    if (ndef_data == "\x1B") return;
 
     for (i = 0; i < ndef_data.length(); i++) { _rfid->ndefMessage.payload[i + 3] = ndef_data.charAt(i); }
     _rfid->ndefMessage.payloadSize = i + 3;
@@ -436,6 +477,7 @@ void TagOMatic::create_ndef_url() {
     _rfid->ndefMessage.payload[0] = uic;
 
     String ndef_data = keyboard(prefix, NDEF_DATA_SIZE, "NDEF data:");
+    if (ndef_data == "\x1B") return;
     ndef_data = ndef_data.substring(prefix.length());
 
     for (i = 0; i < ndef_data.length(); i++) { _rfid->ndefMessage.payload[i + 1] = ndef_data.charAt(i); }
@@ -456,9 +498,10 @@ void TagOMatic::load_file() {
         _read_uid = true;
 
         options = {
-            {"Clone UID",  [this]() { set_state(CLONE_MODE); }},
-            {"Write data", [this]() { set_state(WRITE_MODE); }},
-            {"Check tag",  [this]() { set_state(CHECK_MODE); }},
+            {"Clone UID",   [this]() { set_state(CLONE_MODE); }  },
+            {"Write data",  [this]() { set_state(WRITE_MODE); }  },
+            {"Check tag",   [this]() { set_state(CHECK_MODE); }  },
+            {"Emulate tag", [this]() { set_state(EMULATE_MODE); }},
         };
 
         loopOptions(options);
@@ -472,6 +515,7 @@ void TagOMatic::save_file() {
     String uid_str = _rfid->printableUID.uid;
     uid_str.replace(" ", "");
     String filename = keyboard(uid_str, 30, "File name:");
+    if (filename == "\x1B") return;
 
     display_banner();
 

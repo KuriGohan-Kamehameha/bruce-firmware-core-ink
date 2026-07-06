@@ -2,6 +2,7 @@
 #include "display.h" // using displayRedStripe as error msg
 #include "modules/badusb_ble/ducky_typer.h"
 #include "modules/bjs_interpreter/interpreter.h"
+#include "modules/gps/wdgwars.h"
 #include "modules/gps/wigle.h"
 #include "modules/ir/TV-B-Gone.h"
 #include "modules/ir/custom_ir.h"
@@ -54,8 +55,10 @@ bool setupSdCard() {
         // Serial.println("Task not activated");
     }
     // SDCard on the same bus as the display, so reuse the display SPI instance.
-    else if (bruceConfigPins.SDCARD_bus.mosi == (gpio_num_t)TFT_MOSI &&
-             bruceConfigPins.SDCARD_bus.mosi != GPIO_NUM_NC) {
+    else if (
+        bruceConfigPins.SDCARD_bus.mosi == (gpio_num_t)TFT_MOSI &&
+        bruceConfigPins.SDCARD_bus.mosi != GPIO_NUM_NC
+    ) {
         Serial.println("SDCard shares display bus, using display SPI instance");
 #if TFT_MOSI > 0 // condition for Headless and 8bit displays (no SPI bus)
         if (!SD.begin(bruceConfigPins.SDCARD_bus.cs, tft.getSPIinstance())) {
@@ -162,6 +165,7 @@ bool deleteFromSd(FS fs, String path) {
 ***************************************************************************************/
 bool renameFile(FS fs, String path, String filename) {
     String newName = keyboard(filename, 76, "Type the new Name:");
+    if (newName == "\x1B") return false;
     // Rename the file of folder
     if (fs.rename(path, path.substring(0, path.lastIndexOf('/')) + "/" + newName)) {
         // Serial.println("Renamed from " + filename + " to " + newName);
@@ -329,6 +333,7 @@ bool pasteFile(FS fs, String path) {
 ***************************************************************************************/
 bool createFolder(FS fs, String path) {
     String foldername = keyboard("", 76, "Folder Name: ");
+    if (foldername == "\x1B") return false;
     if (!fs.mkdir(path + "/" + foldername)) {
         displayRedStripe("Couldn't create folder");
         return false;
@@ -350,6 +355,21 @@ String readLineFromFile(File myFile) {
         line += character;
     }
     return line;
+}
+
+/***************************************************************************************
+** Function name: folderExists
+** Description:   check if a folder exists
+***************************************************************************************/
+bool folderExists(FS fs, String path) {
+    if (path == "" || path == "/") return true;
+
+    File dir = fs.open(path);
+    if (!dir) return false;
+
+    bool isDir = dir.isDirectory();
+    dir.close();
+    return isDir;
 }
 
 /***************************************************************************************
@@ -697,6 +717,7 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
                         {"Close Menu", [&]() { yield(); }                                                  },
                         {"Main Menu",  [&]() { exit = true; }                                              },
                     };
+                    while (check(SelPress)) { yield(); } // wait for SEL release to avoid repeated activations
                     loopOptions(options);
                     tft.drawRoundRect(5, 5, tftWidth - 10, tftHeight - 10, 5, bruceConfig.priColor);
                     reload = true;
@@ -710,6 +731,7 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
                     if (fileToCopy != "") options.push_back({"Paste", [=]() { pasteFile(fs, Folder); }});
                     options.push_back({"Close Menu", [&]() { yield(); }});
                     options.push_back({"Main Menu", [&]() { exit = true; }});
+                    while (check(SelPress)) { yield(); } // wait for SEL release to avoid repeated activations
                     loopOptions(options);
                     tft.drawRoundRect(5, 5, tftWidth - 10, tftHeight - 10, 5, bruceConfig.priColor);
                     reload = true;
@@ -722,6 +744,7 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
                              fileList[index].filename; // Folder=="/"? "":"/" +
                     // Debug viewer
                     Serial.println(Folder);
+                    while (check(SelPress)) { yield(); } // wait for SEL release to avoid repeated activations
                     redraw = true;
                 } else if (fileList[index].folder == false && fileList[index].operation == false) {
                     // Save the file/folder info to Clear memory to allow other functions to work better
@@ -767,7 +790,10 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
                     if (filepath.endsWith(".sub"))
                         options.insert(options.begin(), {"Subghz Tx", [&]() {
                                                              delay(200);
-                                                             txSubFile(&fs, filepath);
+                                                             RfCodes data{};
+
+                                                             if (readSubFile(&fs, filepath, data))
+                                                                 txSubFile(data);
                                                          }});
                     if (filepath.endsWith(".csv")) {
                         options.insert(options.begin(), {"Wigle Upload", [&]() {
@@ -779,6 +805,16 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
                                                              delay(200);
                                                              Wigle wigle;
                                                              wigle.upload_all(&fs, Folder);
+                                                         }});
+                        options.insert(options.begin(), {"WDG Upload", [&]() {
+                                                             delay(200);
+                                                             WDGoWars wdg;
+                                                             wdg.upload(&fs, filepath);
+                                                         }});
+                        options.insert(options.begin(), {"WDG Up All", [&]() {
+                                                             delay(200);
+                                                             WDGoWars wdg;
+                                                             wdg.upload_all(&fs, Folder);
                                                          }});
                     }
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
@@ -863,8 +899,12 @@ String loopSD(FS &fs, bool filePicker, String allowed_ext, String rootPath) {
                     }
                     options.push_back({"Close Menu", [&]() { yield(); }});
                     options.push_back({"Main Menu", [&]() { exit = true; }});
-                    if (!filePicker) loopOptions(options);
-                    else {
+                    if (!filePicker) {
+                        while (check(SelPress)) {
+                            yield();
+                        } // wait for SEL release to avoid repeated activations
+                        loopOptions(options);
+                    } else {
                         result = filepath;
                         break;
                     }

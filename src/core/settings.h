@@ -51,6 +51,8 @@ void setEvilAllowSetSsid();
 
 void setEvilPasswordMode();
 
+void setEvilGatewayIp();
+
 void setRFModuleMenu();
 
 void setRFFreqMenu();

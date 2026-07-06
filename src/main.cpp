@@ -118,7 +118,7 @@ bool returnToMenu;
 bool isSleeping = false;
 bool isScreenOff = false;
 bool dimmer = false;
-char timeStr[12];
+char timeStr[16];
 time_t localTime;
 struct tm *timeInfo;
 #if defined(HAS_RTC)
@@ -581,6 +581,9 @@ void setup() {
 
     // Some GPIO Settings (such as CYD's brightness control must be set after tft and sdcard)
     _post_setup_gpio();
+    // Some board interfaces initialize or reset the backlight in post-setup,
+    // so re-apply the stored brightness after that stage completes.
+    setBrightness(bruceConfig.bright, false);
     // end of post gpio begin
 
     // #ifndef USE_TFT_eSPI_TOUCH
@@ -628,14 +631,16 @@ void setup() {
 void loop() {
 #if !defined(LITE_VERSION) && !defined(DISABLE_INTERPRETER)
     if (interpreter_state > 0) {
-        vTaskDelete(serialcmdsTaskHandle); // stop serial commands while in interpreter
         vTaskDelay(pdMS_TO_TICKS(10));
         interpreter_state = 2;
         Serial.println("Entering interpreter...");
         while (interpreter_state > 0) { vTaskDelay(pdMS_TO_TICKS(500)); }
-        Serial.println("Exiting interpreter...");
+        if (interpreter_state == 0) {
+            Serial.println("Interpreter put to background.");
+        } else {
+            Serial.println("Exiting interpreter...");
+        }
         if (interpreter_state == -1) { interpreterTaskHandler = NULL; }
-        startSerialCommandsHandlerTask();
         previousMillis = millis(); // ensure that will not dim screen when get back to menu
     }
 #endif
