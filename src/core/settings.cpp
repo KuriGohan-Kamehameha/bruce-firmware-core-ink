@@ -1021,6 +1021,9 @@ void setRFIDModuleMenu() {
         {"M5 RFID2",
          [=]() { bruceConfigPins.setRfidModule(M5_RFID2_MODULE); },
          bruceConfigPins.rfidModule == M5_RFID2_MODULE     },
+        {"M5 UHF RFID",
+         [=]() { bruceConfigPins.setRfidModule(M5_UHF_RFID_MODULE); },
+         bruceConfigPins.rfidModule == M5_UHF_RFID_MODULE  },
 #ifdef M5STICK
         {"PN532 I2C G33",
          [=]() { bruceConfigPins.setRfidModule(PN532_I2C_MODULE); },
@@ -1040,7 +1043,15 @@ void setRFIDModuleMenu() {
          [=]() { bruceConfigPins.setRfidModule(RC522_SPI_MODULE); },
          bruceConfigPins.rfidModule == RC522_SPI_MODULE    },
     };
-    loopOptions(options, bruceConfigPins.rfidModule);
+
+    int selectedIndex = 0;
+    for (size_t optionIndex = 0; optionIndex < options.size(); optionIndex++) {
+        if (options[optionIndex].selected) {
+            selectedIndex = optionIndex;
+            break;
+        }
+    }
+    loopOptions(options, selectedIndex);
 }
 
 /*********************************************************************

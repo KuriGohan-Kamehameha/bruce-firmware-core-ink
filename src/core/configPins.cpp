@@ -430,7 +430,8 @@ void BruceConfigPins::setI2CPins(I2CPins value) {
 }
 
 void BruceConfigPins::setUARTPins(UARTPins value) {
-    validateUARTPins(value);
+    uart_bus = value;
+    validateUARTPins(uart_bus);
     saveFile();
 }
 void BruceConfigPins::validateSpiPins(SPIPins value) {
@@ -533,7 +534,8 @@ void BruceConfigPins::setRfidModule(RFIDModules value) {
 
 void BruceConfigPins::validateRfidModuleValue() {
     if (rfidModule != M5_RFID2_MODULE && rfidModule != PN532_I2C_MODULE && rfidModule != PN532_SPI_MODULE &&
-        rfidModule != RC522_SPI_MODULE && rfidModule != PN532_I2C_SPI_MODULE) {
+        rfidModule != RC522_SPI_MODULE && rfidModule != PN532_I2C_SPI_MODULE &&
+        rfidModule != M5_UHF_RFID_MODULE) {
         rfidModule = M5_RFID2_MODULE;
     }
 }

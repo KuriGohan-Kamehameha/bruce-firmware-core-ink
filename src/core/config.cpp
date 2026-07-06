@@ -1,6 +1,7 @@
 #include "config.h"
 #include "mifare_keys_manager.h"
 #include "sd_functions.h"
+#include "modules/others/clock_alert_tones.h"
 
 JsonDocument BruceConfig::toJson() const {
     JsonDocument jsonDoc;
@@ -1078,13 +1079,13 @@ void BruceConfig::validateClockAlarmMinute() {
 }
 
 void BruceConfig::validateClockAlarmTone() {
-    if (clockAlarmTone < 0) clockAlarmTone = 0;
-    if (clockAlarmTone > 4) clockAlarmTone = 4;
+    if (clockAlarmTone < CLOCK_ALERT_TONE_MIN) clockAlarmTone = CLOCK_ALERT_TONE_MIN;
+    if (clockAlarmTone > CLOCK_ALERT_TONE_MAX) clockAlarmTone = CLOCK_ALERT_TONE_MAX;
 }
 
 void BruceConfig::validateTimerAlertTone() {
-    if (timerAlertTone < 0) timerAlertTone = 0;
-    if (timerAlertTone > 4) timerAlertTone = 4;
+    if (timerAlertTone < CLOCK_ALERT_TONE_MIN) timerAlertTone = CLOCK_ALERT_TONE_MIN;
+    if (timerAlertTone > CLOCK_ALERT_TONE_MAX) timerAlertTone = CLOCK_ALERT_TONE_MAX;
 }
 
 void BruceConfig::setWifiAtStartup(int value) {

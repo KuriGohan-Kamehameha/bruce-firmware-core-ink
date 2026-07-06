@@ -19,9 +19,15 @@
 #include "menu_items/RFMenu.h"
 #include "menu_items/ScriptsMenu.h"
 #include "menu_items/WifiMenu.h"
+#if !defined(DISABLE_MUSIC_MENU)
+#include "menu_items/MusicMenu.h"
+#endif
 class MainMenu {
 public:
     FileMenu fileMenu;
+#if !defined(DISABLE_MUSIC_MENU)
+    MusicMenu musicMenu;
+#endif
     BleMenu bleMenu;
     ClockMenu clockMenu;
     ConnectMenu connectMenu;

@@ -54,6 +54,7 @@ void RFIDMenu::optionsMenu() {
 
     String txt = "RFID";
     if (bruceConfigPins.rfidModule == M5_RFID2_MODULE) txt += " (RFID2)";
+    else if (bruceConfigPins.rfidModule == M5_UHF_RFID_MODULE) txt += " (UHF)";
 #ifdef M5STICK
     else if (bruceConfigPins.rfidModule == PN532_I2C_MODULE) txt += " (PN532-G33)";
     else if (bruceConfigPins.rfidModule == PN532_I2C_SPI_MODULE) txt += " (PN532-G36)";

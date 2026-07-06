@@ -14,6 +14,38 @@ uint32_t settingsCallback(cmd *c) {
     JsonDocument jsonDoc = bruceConfig.toJson();
     JsonObject setting = jsonDoc.as<JsonObject>();
 
+    if (setting_name == "rfidModule") {
+        if (setting_value.length() == 0) {
+            serialDevice->print(setting_name + " = ");
+            serialDevice->println(String(bruceConfigPins.rfidModule));
+            return true;
+        }
+
+        bruceConfigPins.setRfidModule(static_cast<RFIDModules>(setting_value.toInt()));
+        serialDevice->println("rfidModule = " + String(bruceConfigPins.rfidModule));
+        return true;
+    }
+
+    if (setting_name == "uartRx" || setting_name == "uartTx") {
+        if (setting_value.length() == 0) {
+            serialDevice->print(setting_name + " = ");
+            serialDevice->println(
+                String(setting_name == "uartRx" ? bruceConfigPins.uart_bus.rx : bruceConfigPins.uart_bus.tx)
+            );
+            return true;
+        }
+
+        BruceConfigPins::UARTPins uartPins = bruceConfigPins.uart_bus;
+        if (setting_name == "uartRx") uartPins.rx = static_cast<gpio_num_t>(setting_value.toInt());
+        if (setting_name == "uartTx") uartPins.tx = static_cast<gpio_num_t>(setting_value.toInt());
+        bruceConfigPins.setUARTPins(uartPins);
+        serialDevice->println(
+            "uartRx = " + String(bruceConfigPins.uart_bus.rx) + ", uartTx = " +
+            String(bruceConfigPins.uart_bus.tx)
+        );
+        return true;
+    }
+
     if (setting_name.length() == 0 && setting_value.length() == 0) {
         // no args, just prints current config
         serializeJsonPretty(jsonDoc, Serial);
@@ -82,8 +114,6 @@ uint32_t settingsCallback(cmd *c) {
         bruceConfigPins.setRfFreq(setting_value.toFloat());
     if (setting_name == "rfFxdFreq") bruceConfigPins.setRfFxdFreq(setting_value.toInt());
     if (setting_name == "rfScanRange") bruceConfigPins.setRfScanRange(setting_value.toInt());
-    if (setting_name == "rfidModule")
-        bruceConfigPins.setRfidModule(static_cast<RFIDModules>(setting_value.toInt()));
     if (setting_name == "wigleBasicToken") bruceConfig.setWigleBasicToken(setting_value);
     if (setting_name == "wdgwarsApiKey") bruceConfig.setWdgwarsApiKey(setting_value);
     if (setting_name == "devMode") bruceConfig.setDevMode(setting_value.toInt());

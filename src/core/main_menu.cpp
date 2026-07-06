@@ -5,6 +5,11 @@
 
 MainMenu::MainMenu() {
     _menuItems = {
+#if !defined(DISABLE_MUSIC_MENU)
+#if defined(HAS_NS4168_SPKR) || defined(BUZZ_PIN)
+        &musicMenu,
+#endif
+#endif
         &wifiMenu,
         &bleMenu,
         &rfMenu,

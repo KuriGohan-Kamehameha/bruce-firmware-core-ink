@@ -12,10 +12,21 @@
 #include "esp_task_wdt.h" //Include for Headless mode (long write trigger watchdog in JS)
 
 #include "PN532.h"
+#include "M5UHFRFID.h"
 #include "RFID2.h"
 
 #define NDEF_DATA_SIZE 100
 #define SCAN_DUMP_SIZE 5
+
+namespace {
+bool isPn532RfidModule() {
+    return bruceConfigPins.rfidModule == PN532_I2C_MODULE ||
+           bruceConfigPins.rfidModule == PN532_I2C_SPI_MODULE ||
+           bruceConfigPins.rfidModule == PN532_SPI_MODULE;
+}
+
+bool isReadOnlyRfidModule() { return bruceConfigPins.rfidModule == M5_UHF_RFID_MODULE; }
+} // namespace
 
 TagOMatic::TagOMatic() {
     _initial_state = READ_MODE;
@@ -47,6 +58,7 @@ void TagOMatic::set_rfid_module() {
 #endif
         case PN532_SPI_MODULE: _rfid = new PN532(PN532::CONNECTION_TYPE::SPI); break;
         case RC522_SPI_MODULE: _rfid = new RFID2(false); break;
+        case M5_UHF_RFID_MODULE: _rfid = new M5UHFRFID(); break;
         case M5_RFID2_MODULE:
         default: _rfid = new RFID2(); break;
     }
@@ -94,18 +106,24 @@ void TagOMatic::loop() {
 void TagOMatic::select_state() {
     options = {};
     if (_read_uid) {
-        options.emplace_back("Clone UID", [this]() { set_state(CLONE_MODE); });
-        options.emplace_back("Custom UID", [this]() { set_state(CUSTOM_UID_MODE); });
+        if (!isReadOnlyRfidModule()) {
+            options.emplace_back("Clone UID", [this]() { set_state(CLONE_MODE); });
+            options.emplace_back("Custom UID", [this]() { set_state(CUSTOM_UID_MODE); });
+        }
         options.emplace_back("Check tag", [this]() { set_state(CHECK_MODE); });
-        options.emplace_back("Write data", [this]() { set_state(WRITE_MODE); });
-        options.emplace_back("Emulate tag", [this]() { set_state(EMULATE_MODE); });
+        if (!isReadOnlyRfidModule()) {
+            options.emplace_back("Write data", [this]() { set_state(WRITE_MODE); });
+            options.emplace_back("Emulate tag", [this]() { set_state(EMULATE_MODE); });
+        }
         options.emplace_back("Save file", [this]() { set_state(SAVE_MODE); });
     }
     options.emplace_back("Read tag", [this]() { set_state(READ_MODE); });
     options.emplace_back("Scan tags", [this]() { set_state(SCAN_MODE); });
     options.emplace_back("Load file", [this]() { set_state(LOAD_MODE); });
-    options.emplace_back("Write NDEF", [this]() { set_state(WRITE_NDEF_MODE); });
-    options.emplace_back("Erase tag", [this]() { set_state(ERASE_MODE); });
+    if (!isReadOnlyRfidModule()) {
+        options.emplace_back("Write NDEF", [this]() { set_state(WRITE_NDEF_MODE); });
+        options.emplace_back("Erase tag", [this]() { set_state(ERASE_MODE); });
+    }
 
     loopOptions(options);
 }
@@ -123,10 +141,14 @@ void TagOMatic::set_state(RFID_State state) {
 
     switch (state) {
         case READ_MODE:
+            _read_uid = false;
+            padprintln(isReadOnlyRfidModule() ? "Waiting for UHF tag..." : "Waiting for tag...");
+            break;
         case LOAD_MODE: _read_uid = false; break;
         case SCAN_MODE:
             _scanned_set.clear();
             _scanned_tags.clear();
+            padprintln(isReadOnlyRfidModule() ? "Scanning for UHF tags..." : "Scanning for tags...");
             break;
         case CHECK_MODE:
             _sourceUID = _rfid->printableUID.uid;
@@ -156,6 +178,7 @@ void TagOMatic::set_state(RFID_State state) {
         case ERASE_MODE:
         case CUSTOM_UID_MODE: break;
     }
+    einkFlushIfDirty(0);
     delay(300);
 }
 
@@ -186,6 +209,13 @@ void TagOMatic::display_banner() {
 
 void TagOMatic::dump_card_details() {
     padprintln("Device type: " + _rfid->printableUID.picc_type);
+    if (_rfid->printableUID.picc_type.startsWith("UHF RFID")) {
+        padprintln("EPC: " + _rfid->printableUID.uid);
+        padprintln("PC: " + _rfid->printableUID.sak);
+        padprintln("RSSI: " + _rfid->printableUID.atqa);
+        padprintln("CRC: " + _rfid->printableUID.bcc);
+        return;
+    }
     if (_rfid->printableUID.picc_type != "FeliCa") {
         padprintln("UID: " + _rfid->printableUID.uid);
         padprintln("ATQA: " + _rfid->printableUID.atqa);
@@ -235,7 +265,7 @@ void TagOMatic::read_card() {
     if (millis() - _lastReadTime < 2000) return;
 
     if (_rfid->read() != RFIDInterface::SUCCESS) {
-        if (bruceConfigPins.rfidModule != M5_RFID2_MODULE) { // Read felica if module is PN532
+        if (isPn532RfidModule()) {
             if (_rfid->read(1) != RFIDInterface::SUCCESS) return;
         } else {
             return;
@@ -354,6 +384,7 @@ void TagOMatic::erase_card() {
 
     switch (result) {
         case RFIDInterface::TAG_NOT_PRESENT: return; break;
+        case RFIDInterface::NOT_IMPLEMENTED: displayError("Not implemented for this module."); break;
         case RFIDInterface::SUCCESS: displaySuccess("Tag erased successfully."); break;
         default: displayError("Error erasing data from tag."); break;
     }
@@ -372,6 +403,7 @@ void TagOMatic::write_data() {
 
     switch (result) {
         case RFIDInterface::TAG_NOT_PRESENT: return; break;
+        case RFIDInterface::NOT_IMPLEMENTED: displayError("Not implemented for this module."); break;
         case RFIDInterface::TAG_NOT_MATCH: displayError("Tag types do not match."); break;
         case RFIDInterface::SUCCESS: displaySuccess("Tag written successfully."); break;
         default: displayError("Error writing data to tag."); break;
@@ -392,6 +424,7 @@ void TagOMatic::write_ndef_data() {
 
     switch (result) {
         case RFIDInterface::TAG_NOT_PRESENT: return; break;
+        case RFIDInterface::NOT_IMPLEMENTED: displayError("Not implemented for this module."); break;
         case RFIDInterface::TAG_NOT_MATCH: displayError("Tag is not MIFARE Ultralight."); break;
         case RFIDInterface::SUCCESS: displaySuccess("Tag written successfully."); break;
         default: displayError("Error writing data to tag."); break;
@@ -769,6 +802,7 @@ int TagOMatic::load_file_headless(String filename) {
 #endif
 
 void TagOMatic::delayWithReturn(uint32_t ms) {
+    einkFlushIfDirty(0);
     auto tm = millis();
     while (millis() - tm < ms && !returnToMenu) { vTaskDelay(pdMS_TO_TICKS(50)); }
 }

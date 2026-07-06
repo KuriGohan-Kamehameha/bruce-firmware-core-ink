@@ -19,9 +19,7 @@ void checkPowerSaveTime() {
     if (bruceConfig.dimmerSet == 0) return;
     unsigned long elapsed = millis() - previousMillis;
     int dimmerSetMs = bruceConfig.dimmerSet * 1000;
-    if (elapsed >= (dimmerSetMs + SCREEN_OFF_DELAY) && !isScreenOff && !isSleeping) {
-        isScreenOff = true;
-    }
+    if (elapsed >= (dimmerSetMs + SCREEN_OFF_DELAY) && !isScreenOff && !isSleeping) { isScreenOff = true; }
 #else
     if (bruceConfig.dimmerSet == 0) return;
 

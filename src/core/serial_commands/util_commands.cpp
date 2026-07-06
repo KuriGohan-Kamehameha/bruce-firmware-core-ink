@@ -176,6 +176,9 @@ uint32_t helpCallback(cmd *c) {
         "saved in storage. Optionally hide the default UI."
     );
 
+    serialDevice->println("\nRFID Commands:");
+    serialDevice->println("  rfid read <timeout> [rx] [tx] - Probe the configured RFID module and read a tag.");
+
 #if defined(HAS_NS4168_SPKR) || defined(BUZZ_PIN)
     serialDevice->println("\nAudio Commands:");
     serialDevice->println("  music_player <audio file path>  - Play an audio file.");

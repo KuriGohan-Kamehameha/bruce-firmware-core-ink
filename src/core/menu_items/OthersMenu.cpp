@@ -7,7 +7,9 @@
 #include "modules/others/clicker.h"
 #include "modules/others/ibutton.h"
 #include "modules/others/mic.h"
+#if !defined(DISABLE_APRIL_SHOWER)
 #include "modules/others/april_shower.h"
+#endif
 #include "modules/others/qrcode_menu.h"
 #include "modules/others/tururururu.h"
 #include "modules/others/u2f.h"
@@ -16,7 +18,9 @@
 void OthersMenu::optionsMenu() {
     options = {
         {"QRCodes",      qrcode_menu                  },
+#if !defined(DISABLE_APRIL_SHOWER)
         {"April Shower", april_shower_setup           },
+#endif
         {"Megalodon",    shark_setup                  },
 
 #if defined(MIC_SPM1423) || defined(MIC_INMP441)
