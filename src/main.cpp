@@ -16,15 +16,6 @@ io_expander ioExpander;
 BruceConfig bruceConfig;
 BruceConfigPins bruceConfigPins;
 
-namespace {
-constexpr char kHardcodedWifiSsid[] = "REDACTED_SSID";
-constexpr char kHardcodedWifiPassword[] = "REDACTED_WIFI_PASSWORD";
-
-void applyHardcodedWifiConfig() {
-    bruceConfig.wifiAtStartup = 1;
-    bruceConfig.wifi[kHardcodedWifiSsid] = kHardcodedWifiPassword;
-}
-} // namespace
 
 SerialCli serialCli;
 USBSerial USBserial;
@@ -179,7 +170,6 @@ void begin_storage() {
     if (!LittleFS.begin(true)) { LittleFS.format(), LittleFS.begin(); }
     bool checkFS = setupSdCard();
     bruceConfig.fromFile(checkFS);
-    applyHardcodedWifiConfig();
     bruceConfigPins.fromFile(checkFS);
 #if !defined(BUZZ_PIN) && !defined(HAS_NS4168_SPKR)
     // Boards without an audio output keep sound disabled to avoid dead-end audio paths.
