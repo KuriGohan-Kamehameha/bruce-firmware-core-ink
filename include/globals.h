@@ -209,7 +209,9 @@ extern volatile bool EscPress;
 extern volatile bool AnyKeyPress;
 
 extern volatile bool AuxPress;
+#if defined(PIRANESI_APP)
 extern volatile bool PwrDoublePress; // power-button double click (latched; consumer clears)
+#endif
 
 extern volatile bool NextPagePress;
 

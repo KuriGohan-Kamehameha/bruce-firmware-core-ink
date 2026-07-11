@@ -50,7 +50,9 @@ volatile bool PrevPress = false;
 volatile bool UpPress = false;
 volatile bool DownPress = false;
 volatile bool SelPress = false;
+#if defined(PIRANESI_APP)
 volatile bool PwrDoublePress = false;
+#endif
 volatile bool EscPress = false;
 volatile bool AnyKeyPress = false;
 volatile bool AuxPress = false;

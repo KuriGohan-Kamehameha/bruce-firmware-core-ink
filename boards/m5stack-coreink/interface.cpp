@@ -221,6 +221,7 @@ void InputHandler(void) {
         rightPressed = false;
     }
 
+#if defined(PIRANESI_APP)
     // Power-button double click: latch a flag for the app (a double click
     // suppresses wasClicked(), so the short-press action below won't also fire).
     if (M5.BtnPWR.wasDoubleClicked()) {
@@ -229,6 +230,7 @@ void InputHandler(void) {
         triggerInputLedPulse();
         return;
     }
+#endif
 
     if (pwrShortPressed) {
         tm = millis();

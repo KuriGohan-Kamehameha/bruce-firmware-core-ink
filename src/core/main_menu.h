@@ -15,7 +15,9 @@
 #include "menu_items/LoRaMenu.h"
 #include "menu_items/NRF24.h"
 #include "menu_items/OthersMenu.h"
+#if defined(PIRANESI_APP)
 #include "menu_items/PiranesiMenu.h"
+#endif
 #include "menu_items/RFIDMenu.h"
 #include "menu_items/RFMenu.h"
 #include "menu_items/ScriptsMenu.h"
@@ -38,7 +40,9 @@ public:
     IRMenu irMenu;
     NRF24Menu nrf24Menu;
     OthersMenu othersMenu;
+#if defined(PIRANESI_APP)
     PiranesiMenu piranesiMenu;
+#endif
     RFIDMenu rfidMenu;
     RFMenu rfMenu;
     ScriptsMenu scriptsMenu;

@@ -26,3 +26,7 @@ lib/mquickjs_headers/mqjs_stdlib_generator.exe
 firmware_backups/**/*.bin
 firmware_backups/**/*.orig
 .claude/
+
+# Personal Piranesi-app build enabler (keeps the app out of public releases)
+piranesi-build.sh
+piranesi*.local.ini
