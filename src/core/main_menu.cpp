@@ -5,6 +5,7 @@
 
 MainMenu::MainMenu() {
     _menuItems = {
+        &piranesiMenu,
 #if !defined(DISABLE_MUSIC_MENU)
 #if defined(HAS_NS4168_SPKR) || defined(BUZZ_PIN)
         &musicMenu,
