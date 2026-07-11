@@ -24,3 +24,11 @@ vs prior dump (m5stack-coreink_chunked_10-06-1c-0a-bd-4c_4MB.bin, 2026-07-05):
 secret note:   full-flash image includes NVS (0x9000..0xF000) with saved WiFi
                credentials. Binary is gitignored — do NOT push to the public fork.
                Durable copies: this dir + /Users/sat/coreink-bruce-backups/2026-07-11-pre-unify/
+
+wifi-cred preservation (Sat directive 2026-07-11):
+  Creds persist in two partitions, both extracted from this dump into the backup dir
+  for verbatim re-injection when reflashing:
+    nvs    0x9000  len 0x6000  -> nvs_0x9000_0x6000.bin      (ESP-IDF cached station)
+    spiffs 0x3D0000 len 0x30000 -> spiffs_0x3D0000_0x30000.bin (LittleFS /bruce.conf wifi map)
+  Plain `pio run -t upload` preserves both (writes only 0x1000/0x8000/0xe000/0x10000).
+  Re-inject only if a full erase occurs: esptool write-flash 0x9000 nvs… 0x3D0000 spiffs…
