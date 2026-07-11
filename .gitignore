@@ -22,3 +22,6 @@ lib/mquickjs_headers/mqjs_stdlib_generator.exe
 .github/agents/Bruce-AI.agent.md
 .idea
 .ai
+# Firmware dumps contain NVS (WiFi creds/secrets) — never push to public fork
+firmware_backups/**/*.bin
+firmware_backups/**/*.orig
