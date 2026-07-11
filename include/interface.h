@@ -66,3 +66,8 @@ void checkReboot();
 ** Description:   Determines if the device is charging
 ***************************************************************************************/
 bool isCharging();
+
+// True when external (USB) power is present — the "plugged in" signal, which
+// stays true even after the battery is full (unlike isCharging()). Weak so
+// boards without power sensing default to false.
+bool __attribute__((weak)) isPluggedIn();
