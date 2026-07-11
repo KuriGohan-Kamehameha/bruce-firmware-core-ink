@@ -1,0 +1,34 @@
+Last-Known-Working firmware dump — M5Stack CoreInk
+==================================================
+captured:      2026-07-11 (esptool v5.3.1, read-flash 0x0..0x400000 @115200)
+device:        ESP32-PICO-D4 (revision v1.1)
+MAC:           10:06:1c:0a:bd:4c
+flash:         4 MB (mfr 0xc8 GigaDevice, dev 0x4016), 3.3V strapping
+port:          /dev/cu.usbserial-58AB0342891 (CH-family "USB Single Serial")
+
+file:          m5stack-coreink_lkw_10-06-1c-0a-bd-4c_2026-07-11_4MB.bin  (4194304 bytes)
+sha256:        31fe2622065226beab3b113e449e26aa042caceec40d6de3ac97a5fcb3728144
+region sha256:
+  app0   (0x10000..0x3D0000):  44121744c20caeb2dd23e777a343180bd7958bef13dbd6dc304a72797097d156
+  spiffs (0x3D0000..0x400000): 62ae44d88aed991db7671ecc2280ff194559cdf7c230f563dfb0688d9336236a
+
+provenance:    built from THIS repo (embeds .pio/libdeps/m5stack-coreink/… paths);
+               BRUCE_VERSION="dev"; app0 carries pwnagotchi feature strings →
+               the 175b9bd8 "Final powerSave and pwnagotchi adjustments" line
+               (fully contained in main c4b7f518). Feature-set diff pinned in Phase C.
+
+vs prior dump (m5stack-coreink_chunked_10-06-1c-0a-bd-4c_4MB.bin, 2026-07-05):
+  DIFFERS. app0 differs (prior 55201185…dece) → device was reflashed since Jul 5;
+  this dump is the authoritative last-known-working, not a duplicate.
+
+secret note:   full-flash image includes NVS (0x9000..0xF000) with saved WiFi
+               credentials. Binary is gitignored — do NOT push to the public fork.
+               Durable copies: this dir + /Users/sat/coreink-bruce-backups/2026-07-11-pre-unify/
+
+wifi-cred preservation (Sat directive 2026-07-11):
+  Creds persist in two partitions, both extracted from this dump into the backup dir
+  for verbatim re-injection when reflashing:
+    nvs    0x9000  len 0x6000  -> nvs_0x9000_0x6000.bin      (ESP-IDF cached station)
+    spiffs 0x3D0000 len 0x30000 -> spiffs_0x3D0000_0x30000.bin (LittleFS /bruce.conf wifi map)
+  Plain `pio run -t upload` preserves both (writes only 0x1000/0x8000/0xe000/0x10000).
+  Re-inject only if a full erase occurs: esptool write-flash 0x9000 nvs… 0x3D0000 spiffs…
