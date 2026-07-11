@@ -50,6 +50,7 @@ volatile bool PrevPress = false;
 volatile bool UpPress = false;
 volatile bool DownPress = false;
 volatile bool SelPress = false;
+volatile bool PwrDoublePress = false;
 volatile bool EscPress = false;
 volatile bool AnyKeyPress = false;
 volatile bool AuxPress = false;

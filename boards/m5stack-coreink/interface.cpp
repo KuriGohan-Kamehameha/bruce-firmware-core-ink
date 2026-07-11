@@ -221,6 +221,15 @@ void InputHandler(void) {
         rightPressed = false;
     }
 
+    // Power-button double click: latch a flag for the app (a double click
+    // suppresses wasClicked(), so the short-press action below won't also fire).
+    if (M5.BtnPWR.wasDoubleClicked()) {
+        PwrDoublePress = true;
+        tm = millis();
+        triggerInputLedPulse();
+        return;
+    }
+
     if (pwrShortPressed) {
         tm = millis();
         triggerInputLedPulse();

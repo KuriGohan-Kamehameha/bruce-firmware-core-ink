@@ -209,6 +209,7 @@ extern volatile bool EscPress;
 extern volatile bool AnyKeyPress;
 
 extern volatile bool AuxPress;
+extern volatile bool PwrDoublePress; // power-button double click (latched; consumer clears)
 
 extern volatile bool NextPagePress;
 
