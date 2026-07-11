@@ -221,17 +221,6 @@ void InputHandler(void) {
         rightPressed = false;
     }
 
-#if defined(PIRANESI_APP)
-    // Power-button double click: latch a flag for the app (a double click
-    // suppresses wasClicked(), so the short-press action below won't also fire).
-    if (M5.BtnPWR.wasDoubleClicked()) {
-        PwrDoublePress = true;
-        tm = millis();
-        triggerInputLedPulse();
-        return;
-    }
-#endif
-
     if (pwrShortPressed) {
         tm = millis();
         triggerInputLedPulse();
@@ -282,21 +271,4 @@ void checkReboot() {}
 ***************************************************************************************/
 bool isCharging() {
     return readChargingState();
-}
-
-bool isPluggedIn() {
-    if (isExternalPowerPresent()) return true; // honor real VBUS where a board has it
-    // CoreInk is pmic_adc: no VBUS/charge sensing. A resting Li-ion cell never
-    // exceeds ~4.20V (charge-termination); a reading sustained above that means a
-    // charger is actively floating it. EMA + hysteresis debounces the ADC noise.
-    // Limitation: only detects "on charger" once the cell is full — during active
-    // charge-up (lower voltage) it reads as unplugged.
-    static float ema = 0.0f;
-    static bool plugged = false;
-    int mv = (int)M5.Power.getBatteryVoltage();
-    if (mv < 3000 || mv > 5000) return plugged; // implausible reading -> hold
-    ema = (ema < 3000.0f) ? (float)mv : (ema * 0.8f + (float)mv * 0.2f);
-    if (ema >= 4205.0f) plugged = true;
-    else if (ema <= 4185.0f) plugged = false;
-    return plugged;
 }
