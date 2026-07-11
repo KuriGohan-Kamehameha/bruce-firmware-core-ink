@@ -26,5 +26,10 @@ Date: 2026-07-11 · Author: CPCS
 | Settings/e-ink persistence (dimmer/refresh validators) | intact | `config.cpp` serialization/validators byte-identical |
 | Startup init order, LittleFS mount | intact | `setup()` order identical; only a no-op `setBrightness` added |
 
+## Live-endpoint status (verified 2026-07-11, post-flash)
+- Device flashed + hash-verified; boots clean (`POWERON_RESET`); **LittleFS mounted with preserved per-MAC config** (`brucePins.conf`, `rotSet:true`) — creds **not** wiped. Device auto-connected to WiFi (ARP `10.255.253.132` = MAC `10:6:1c:a:bd:4c`) using the **preserved** credentials. Creds-preservation goal fully met.
+- **Red Iris endpoint is not currently live at the documented address.** `kulfi:1880` (HA host, Tailscale `100.71.135.74`) refuses `:1880`; `10.255.253.20:1880` is an unrelated nginx-HTTPS service. Also, `kulfi` resolves only via Tailscale MagicDNS, **not** LAN DNS, so a plain-WiFi CoreInk can't resolve the default host. The Node-RED Red Iris flow (`red-iris-nodered/`) must be **deployed** (needs an HA long-lived token + entity config) and the app pointed at kulfi's LAN IP via **Set Host/IP**. This is a server-side deploy, independent of firmware correctness.
+- **Physical UI test pending Sat:** navigating the on-device menu to the `Piranesi` app and issuing a `/control` action requires the rocker buttons (cannot be driven remotely).
+
 ## Conclusion
 The July upstream sync **did not regress any CoreInk behavior** — it preserved everything byte-for-byte and added two hardening fixes. The one real hazard (partition-migration creds wipe) is now fixed via the CoreInk-specific partition table. Proposed release + this fix is safe to flash with creds intact.
