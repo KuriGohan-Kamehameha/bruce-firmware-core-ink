@@ -1,1 +1,0 @@
-# NimBLE Sample Scan example
