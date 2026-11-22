@@ -347,6 +347,8 @@ public:
 
     int16_t textWidth(const char *string) { return 5 * gfxFontSize; }
     int16_t textWidth(const char *string, uint8_t font) { return 5 * gfxFontSize; }
+    int16_t textWidth(const String &string) { return textWidth(string.c_str()); }
+    int16_t textWidth(const String &string, uint8_t font) { return textWidth(string.c_str(), font); }
 
     uint8_t sumBytes(void *data, int length) {
         uint8_t *p = (uint8_t *)data;
