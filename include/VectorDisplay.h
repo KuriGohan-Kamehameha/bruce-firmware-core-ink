@@ -344,6 +344,7 @@ public:
     uint16_t height() { return (rotation % 2) ? curWidth : curHeight; }
 
     int16_t fontHeight(void) { return 8 * gfxFontSize; }
+    int16_t fontHeight(int16_t font) { return 8 * gfxFontSize; }
 
     int16_t textWidth(const char *string) { return 5 * gfxFontSize; }
     int16_t textWidth(const char *string, uint8_t font) { return 5 * gfxFontSize; }
