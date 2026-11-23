@@ -27,7 +27,7 @@ Date: 2026-07-11 · Author: CPCS
 | Startup init order, LittleFS mount | intact | `setup()` order identical; only a no-op `setBrightness` added |
 
 ## Post-flash verification (2026-07-11)
-- Device flashed + hash-verified; boots clean (`POWERON_RESET`); **LittleFS mounted with preserved per-MAC config** (`brucePins.conf`, `rotSet:true`) — creds **not** wiped. Device auto-connected to WiFi (ARP `10.255.253.132` = MAC `10:6:1c:a:bd:4c`) using the **preserved** credentials. Creds-preservation goal fully met.
+- Device flashed + hash-verified; boots clean (`POWERON_RESET`); **LittleFS mounted with preserved per-MAC config** (`brucePins.conf`, `rotSet:true`) — creds **not** wiped. Device auto-connected to WiFi (its MAC appeared in the LAN ARP table) using the **preserved** credentials. Creds-preservation goal fully met.
 
 ## Conclusion
 The July upstream sync **did not regress any CoreInk behavior** — it preserved everything byte-for-byte and added two hardening fixes. The one real hazard (partition-migration creds wipe) is now fixed via the CoreInk-specific partition table. Proposed release + this fix is safe to flash with creds intact.
